@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="docs/static/img/fuzzforge_banner_github.png" alt="FuzzForge Banner" width="20%">
+  <img src="docs/static/img/fuzzforge_banner_github.png" alt="FuzzForge Banner" width="100%">
 </p>
-<h1 align="center">FuzzForge 🚧</h1>
+<h1 align="center">🚧 FuzzForge is under active development</h1>
 
 <p align="center"><strong>AI-powered workflow automation and AI Agents for AppSec, Fuzzing & Offensive Security</strong></p>
 
