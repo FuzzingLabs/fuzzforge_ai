@@ -152,7 +152,9 @@ services:
         chmod 755 /prefect-storage &&
         echo '{\"insecure-registries\": [\"registry:5000\", \"localhost:5001\", \"host.docker.internal:5001\"]}' > /tmp/docker/config.json &&
         pip install 'prefect[docker]' &&
-        prefect worker start --pool docker-pool
+        echo 'Waiting for backend to create work pool...' &&
+        sleep 15 &&
+        prefect worker start --pool docker-pool --type docker
       "
     volumes:
       - prefect_storage:/prefect-storage  # Access to shared storage for results

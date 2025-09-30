@@ -382,7 +382,7 @@ class PrefectManager:
                 "image": deploy_image,  # Use the worker-accessible registry name
                 "volumes": [],  # Populated at run submission with toolbox mount
                 "env": {
-                    "PYTHONPATH": "/opt/prefect/toolbox:/opt/prefect/toolbox/workflows",
+                    "PYTHONPATH": "/opt/prefect/toolbox:/opt/prefect",
                     "WORKFLOW_NAME": name
                 }
             }
