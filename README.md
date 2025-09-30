@@ -11,7 +11,7 @@
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+"/></a>
   <a href="https://fuzzforge.ai"><img src="https://img.shields.io/badge/Website-fuzzforge.ai-blue?logo=vercel" alt="Website"/></a>
   <img src="https://img.shields.io/badge/version-0.6.0-green" alt="Version">
-  <a href="https://github.com/fuzzinglabs/fuzzforge_ai/stargazers"><img src="https://img.shields.io/github/stars/fuzzinglabs/fuzzforge_ai?style=social" alt="GitHub Stars"></a>
+  <a href="https://github.com/FuzzingLabs/fuzzforge_ai/stargazers"><img src="https://img.shields.io/github/stars/FuzzingLabs/fuzzforge_ai?style=social" alt="GitHub Stars"></a>
   
 </p>
 
@@ -45,8 +45,8 @@ FuzzForge is **open source**, built to empower security teams, researchers, and 
 
 ## ⭐ Support the Project
 
-<a href="https://github.com/fuzzinglabs/fuzzforge/stargazers">
-  <img src="https://img.shields.io/github/stars/fuzzinglabs/fuzzforge_ai?style=social" alt="GitHub Stars">
+<a href="https://github.com/FuzzingLabs/fuzzforge_ai/stargazers">
+  <img src="https://img.shields.io/github/stars/FuzzingLabs/fuzzforge_ai?style=social" alt="GitHub Stars">
 </a>
 
 If you find FuzzForge useful, please star the repo to support development 🚀
