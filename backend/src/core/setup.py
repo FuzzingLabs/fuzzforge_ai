@@ -160,8 +160,8 @@ async def setup_docker_pool():
                                 "type": "array",
                                 "title": "Volume Mounts",
                                 "default": [
-                                    f"{get_actual_compose_project_name()}_prefect_storage:/prefect-storage",
-                                    f"{get_actual_compose_project_name()}_toolbox_code:/opt/prefect/toolbox:ro"
+                                    "fuzzforge_prefect_storage:/prefect-storage",
+                                    "fuzzforge_toolbox_code:/opt/prefect/toolbox:ro"
                                 ],
                                 "description": "Volume mounts in format 'host:container:mode'",
                                 "items": {
@@ -171,7 +171,7 @@ async def setup_docker_pool():
                             "networks": {
                                 "type": "array",
                                 "title": "Docker Networks",
-                                "default": [f"{get_actual_compose_project_name()}_default"],
+                                "default": ["fuzzforge_default"],
                                 "description": "Docker networks to connect container to",
                                 "items": {
                                     "type": "string"
@@ -211,10 +211,10 @@ def get_actual_compose_project_name():
     """
     Return the hardcoded compose project name for FuzzForge.
 
-    Always returns 'fuzzforge_alpha' as per system requirements.
+    Always returns 'fuzzforge' as per system requirements.
     """
-    logger.info("Using hardcoded compose project name: fuzzforge_alpha")
-    return "fuzzforge_alpha"
+    logger.info("Using hardcoded compose project name: fuzzforge")
+    return "fuzzforge"
 
 
 async def setup_result_storage():
@@ -388,10 +388,10 @@ async def validate_infrastructure():
     # Validate registry connectivity for custom image building
     await validate_registry_connectivity()
 
-    # Validate network (check for default network pattern)
+    # Validate network (hardcoded to avoid directory name dependencies)
     import os
-    compose_project = os.getenv('COMPOSE_PROJECT_NAME', 'fuzzforge_alpha')
-    docker_network = f"{compose_project}_default"
+    compose_project = "fuzzforge"
+    docker_network = "fuzzforge_default"
 
     try:
         await validate_docker_network(docker_network)

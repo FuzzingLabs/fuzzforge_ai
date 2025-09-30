@@ -32,10 +32,10 @@
 
 **FuzzForge** helps security researchers and engineers automate **application security** and **offensive security** workflows with the power of AI and fuzzing frameworks.
 
-- Orchestrate static & dynamic analysis  
-- Automate vulnerability research  
-- Scale AppSec testing with AI agents  
-- Build, share & reuse workflows across teams  
+- Orchestrate static & dynamic analysis
+- Automate vulnerability research
+- Scale AppSec testing with AI agents
+- Build, share & reuse workflows across teams
 
 FuzzForge is **open source**, built to empower security teams, researchers, and the community.
 
@@ -55,12 +55,12 @@ If you find FuzzForge useful, please star the repo to support development 🚀
 
 ## ✨ Key Features
 
-- 🤖 **AI Agents for Security** – Specialized agents for AppSec, reversing, and fuzzing  
-- 🛠 **Workflow Automation** – Define & execute AppSec workflows as code  
-- 📈 **Vulnerability Research at Scale** – Rediscover 1-days & find 0-days with automation  
-- 🔗 **Fuzzer Integration** – AFL, Honggfuzz, AFLnet, StateAFL & more  
-- 🌐 **Community Marketplace** – Share workflows, corpora, PoCs, and modules  
-- 🔒 **Enterprise Ready** – Team/Corp cloud tiers for scaling offensive security  
+- 🤖 **AI Agents for Security** – Specialized agents for AppSec, reversing, and fuzzing
+- 🛠 **Workflow Automation** – Define & execute AppSec workflows as code
+- 📈 **Vulnerability Research at Scale** – Rediscover 1-days & find 0-days with automation
+- 🔗 **Fuzzer Integration** – AFL, Honggfuzz, AFLnet, StateAFL & more
+- 🌐 **Community Marketplace** – Share workflows, corpora, PoCs, and modules
+- 🔒 **Enterprise Ready** – Team/Corp cloud tiers for scaling offensive security
 
 ---
 
@@ -72,6 +72,7 @@ If you find FuzzForge useful, please star the repo to support development 🚀
 Python 3.11 or higher is required.
 
 **uv Package Manager**
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
@@ -122,25 +123,27 @@ ff workflow security_assessment . # Start a workflow (you can also use ff comman
 ```
 
 ### Manual Workflow Setup
+
 ![Manual Workflow Demo](docs/static/videos/manual_workflow.gif)
 
-*Setting up and running security workflows through the interface*
+_Setting up and running security workflows through the interface_
 
 👉 More installation options in the [Documentation](https://fuzzforge.ai/docs).
 
 ---
 
 ## AI-Powered Workflow Execution
+
 ![LLM Workflow Demo](docs/static/videos/llm_workflow.gif)
 
-*AI agents automatically analyzing code and providing security insights*
+_AI agents automatically analyzing code and providing security insights_
 
 ## 📚 Resources
 
-- 🌐 [Website](https://fuzzforge.ai)  
-- 📖 [Documentation](https://fuzzforge.ai/docs)  
-- 💬 [Community Discord](https://discord.com/invite/acqv9FVG)  
-- 🎓 [FuzzingLabs Academy](https://academy.fuzzinglabs.com/?coupon=GITHUB_FUZZFORGE)  
+- 🌐 [Website](https://fuzzforge.ai)
+- 📖 [Documentation](https://fuzzforge.ai/docs)
+- 💬 [Community Discord](https://discord.com/invite/acqv9FVG)
+- 🎓 [FuzzingLabs Academy](https://academy.fuzzinglabs.com/?coupon=GITHUB_FUZZFORGE)
 
 ---
 
@@ -148,10 +151,11 @@ ff workflow security_assessment . # Start a workflow (you can also use ff comman
 
 We welcome contributions from the community!  
 There are many ways to help:
-- Report bugs by opening an [issue](../../issues)  
-- Suggest new features or improvements  
-- Submit pull requests with fixes or enhancements  
-- Share workflows, corpora, or modules with the community  
+
+- Report bugs by opening an [issue](../../issues)
+- Suggest new features or improvements
+- Submit pull requests with fixes or enhancements
+- Share workflows, corpora, or modules with the community
 
 See our [Contributing Guide](CONTRIBUTING.md) for details.
 
@@ -160,6 +164,7 @@ See our [Contributing Guide](CONTRIBUTING.md) for details.
 ## 🗺️ Roadmap
 
 Planned features and improvements:
+
 - 📦 Public workflow & module marketplace
 - 🤖 New specialized AI agents (Rust, Go, Android, Automotive)
 - 🔗 Expanded fuzzer integrations (LibFuzzer, Jazzer, more network fuzzers)

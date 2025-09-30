@@ -51,8 +51,8 @@ class FuzzForgeSetup:
         """Print welcome header"""
         print(f"""{Colors.CYAN}{Colors.BOLD}
 ╔══════════════════════════════════════════╗
-║           FuzzForge Setup Script         ║
-║      Automated Development Setup         ║
+║           FuzzForge Setup Script           ║
+║       Automated Development Setup        ║
 ╚══════════════════════════════════════════╝
 {Colors.END}""")
         print(f"{Colors.WHITE}Welcome to FuzzForge! This script will set up your development environment.{Colors.END}\n")
@@ -115,16 +115,21 @@ class FuzzForgeSetup:
             self.errors.append(f"Python version {python_version} is too old. Please install Python 3.11+")
             all_good = False
 
-        # Check Docker
-        docker_success, docker_output = self.run_command("docker --version", "Checking Docker", critical=False)
+        # Check Docker daemon is running
+        docker_success, docker_output = self.run_command("docker ps", "Checking Docker", critical=False)
         if not docker_success:
-            self.errors.append("Docker is not installed. Please install Docker Desktop")
+            self.errors.append("Docker daemon is not running. Please start Docker Desktop")
             all_good = False
 
-        # Check Docker Compose
-        compose_success, _ = self.run_command("docker compose version", "Checking Docker Compose", critical=False)
-        if not compose_success:
-            self.errors.append("Docker Compose is not available. Please ensure Docker Desktop is installed properly")
+        # Check Docker Compose with actual compose file validation
+        if docker_success:
+            compose_success, _ = self.run_command("docker compose config --quiet", "Checking Docker Compose", critical=False)
+            if not compose_success:
+                self.errors.append("Docker Compose validation failed. Please ensure docker-compose.yaml is valid and Docker is running")
+                all_good = False
+        else:
+            print(f"{Colors.RED}❌ Checking Docker Compose failed: Docker daemon not running{Colors.END}")
+            self.errors.append("Docker Compose cannot be validated - Docker daemon not running")
             all_good = False
 
         # Check UV
@@ -215,18 +220,10 @@ class FuzzForgeSetup:
             self.errors.append("CLI directory not found")
             return False
 
-        os.chdir(cli_dir)
-
-        # Install CLI using UV
-        success, _ = self.run_command("uv tool install .", "Installing FuzzForge CLI")
-        if not success:
-            # Fallback to pip
-            print(f"{Colors.YELLOW}📦 Trying pip installation as fallback...{Colors.END}")
-            success, _ = self.run_command("pip install .", "Installing CLI with pip")
+        # Install from root, pointing to the 'cli' directory
+        success, _ = self.run_command("uv tool install --python python3.12 .", "Installing FuzzForge CLI with Python 3.12")
 
         return success
-
-
 
     def print_next_steps(self):
         """Print next steps for the user"""

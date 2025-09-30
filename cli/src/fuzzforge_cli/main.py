@@ -29,6 +29,7 @@ from .commands import (
     ai,
     ingest,
 )
+from .constants import DEFAULT_VOLUME_MODE
 from .fuzzy import enhanced_command_not_found_handler
 
 # Install rich traceback handler
@@ -180,6 +181,31 @@ workflow_app.command("params")(workflows.workflow_parameters)
 def run_workflow(
     workflow: str = typer.Argument(help="Workflow name"),
     target: str = typer.Argument(help="Target path"),
+    params: List[str] = typer.Argument(default=None, help="Parameters as key=value pairs"),
+    param_file: Optional[str] = typer.Option(
+        None, "--param-file", "-f",
+        help="JSON file containing workflow parameters"
+    ),
+    volume_mode: str = typer.Option(
+        DEFAULT_VOLUME_MODE, "--volume-mode", "-v",
+        help="Volume mount mode: ro (read-only) or rw (read-write)"
+    ),
+    timeout: Optional[int] = typer.Option(
+        None, "--timeout", "-t",
+        help="Execution timeout in seconds"
+    ),
+    interactive: bool = typer.Option(
+        True, "--interactive/--no-interactive", "-i/-n",
+        help="Interactive parameter input for missing required parameters"
+    ),
+    wait: bool = typer.Option(
+        False, "--wait", "-w",
+        help="Wait for execution to complete"
+    ),
+    live: bool = typer.Option(
+        False, "--live", "-l",
+        help="Start live monitoring after execution (useful for fuzzing workflows)"
+    )
 ):
     """
     🚀 Execute a security testing workflow
@@ -189,13 +215,13 @@ def run_workflow(
     execute_workflow(
         workflow=workflow,
         target_path=target,
-        params=[],
-        param_file=None,
-        volume_mode='ro',
-        timeout=None,
-        interactive=True,
-        wait=False,
-        live=False
+        params=params,
+        param_file=param_file,
+        volume_mode=volume_mode,
+        timeout=timeout,
+        interactive=interactive,
+        wait=wait,
+        live=live
     )
 
 @workflow_app.callback()
@@ -406,37 +432,6 @@ def main():
     if len(sys.argv) > 1:
         args = sys.argv[1:]
 
-        # Handle workflow command with pattern recognition
-        if len(args) >= 3 and args[0] == 'workflow':
-            workflow_subcommands = ['run', 'status', 'history', 'retry', 'info', 'params']
-            # Skip custom dispatching if help flags are present
-            if not any(arg in ['--help', '-h', '--version', '-v'] for arg in args):
-                if args[1] not in workflow_subcommands:
-                    # Direct workflow execution: ff workflow <name> <target>
-                    from .commands.workflow_exec import execute_workflow
-
-                    workflow_name = args[1]
-                    target_path = args[2]
-                    remaining_params = args[3:] if len(args) > 3 else []
-
-                    console.print(f"🚀 Executing workflow: {workflow_name} on {target_path}")
-
-                    try:
-                        execute_workflow(
-                            workflow=workflow_name,
-                            target_path=target_path,
-                            params=remaining_params,
-                            param_file=None,
-                            volume_mode='ro',
-                            timeout=None,
-                            interactive=True,
-                            wait=False,
-                            live=False
-                        )
-                        return
-                    except Exception as e:
-                        console.print(f"❌ Failed to execute workflow: {e}", style="red")
-                        sys.exit(1)
 
         # Handle finding command with pattern recognition
         if len(args) >= 2 and args[0] == 'finding':

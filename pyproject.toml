@@ -1,0 +1,28 @@
+[project]
+name = "fuzzforge"
+version = "0.6.0"
+description = "FuzzForge Platform - Complete fuzzing and security testing platform with AI capabilities"
+readme = "README.md"
+license = { text = "BSL-1.1" }
+requires-python = ">=3.11"
+dependencies = [
+    "fuzzforge-sdk",
+    "fuzzforge-ai",
+    "fuzzforge-cli",
+]
+
+[project.scripts]
+fuzzforge = "fuzzforge_cli.main:main"
+ff = "fuzzforge_cli.main:main"
+
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.setuptools]
+packages = []
+
+[tool.uv.sources]
+fuzzforge-sdk = { path = "./sdk", editable = true }
+fuzzforge-ai = { path = "./ai", editable = true }
+fuzzforge-cli = { path = "./cli", editable = true }

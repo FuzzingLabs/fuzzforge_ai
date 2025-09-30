@@ -217,11 +217,16 @@ services:
 
 volumes:
   postgres_data:
+    name: fuzzforge_postgres_data
   redis_data:
+    name: fuzzforge_redis_data
   prefect_storage:
+    name: fuzzforge_prefect_storage
   toolbox_code:
+    name: fuzzforge_toolbox_code
   registry_data:
+    name: fuzzforge_registry_data
 
 networks:
   default:
-    name: fuzzforge_alpha_default
+    name: fuzzforge_default

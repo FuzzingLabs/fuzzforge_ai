@@ -189,7 +189,7 @@ services:
 
 Example configuration:
 ```bash
-COMPOSE_PROJECT_NAME=fuzzforge_alpha
+COMPOSE_PROJECT_NAME=fuzzforge
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fuzzforge
 PREFECT_API_URL=http://prefect-server:4200/api
 DOCKER_REGISTRY=localhost:5001

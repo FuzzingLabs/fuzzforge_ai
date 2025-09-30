@@ -24,7 +24,7 @@ cd fuzzforge
 Create the required environment configuration:
 
 ```bash
-echo "COMPOSE_PROJECT_NAME=fuzzforge_alpha" > .env
+echo "COMPOSE_PROJECT_NAME=fuzzforge" > .env
 ```
 
 ## Step 2: Configure Docker (Critical Step)

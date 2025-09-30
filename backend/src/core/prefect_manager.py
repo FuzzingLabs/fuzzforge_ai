@@ -65,12 +65,12 @@ def get_registry_url(context: str = "default") -> str:
     return os.getenv("FUZZFORGE_REGISTRY_PULL_URL", os.getenv("FUZZFORGE_REGISTRY_PUSH_URL", "localhost:5001"))
 
 
-def _compose_project_name(default: str = "fuzzforge_alpha") -> str:
+def _compose_project_name(default: str = "fuzzforge") -> str:
     """Return the docker-compose project name used for network/volume naming.
 
-    Honors COMPOSE_PROJECT_NAME if present; falls back to a sensible default.
+    Always returns 'fuzzforge' regardless of environment variables.
     """
-    return os.getenv("COMPOSE_PROJECT_NAME", default)
+    return "fuzzforge"
 
 
 class PrefectManager:
@@ -539,18 +539,18 @@ class PrefectManager:
                     raise enhanced_error
 
             # Determine the Docker Compose network name and volume names
-            # Docker Compose creates networks with pattern: {project_name}_default
+            # Hardcoded to 'fuzzforge' to avoid directory name dependencies
             import os
-            compose_project = _compose_project_name('fuzzforge_alpha')
-            docker_network = f"{compose_project}_default"
+            compose_project = "fuzzforge"
+            docker_network = "fuzzforge_default"
 
             # Build volume mounts
             # Add toolbox volume mount for workflow code access
             backend_toolbox_path = "/app/toolbox"  # Path in backend container
 
-            # Use dynamic volume names based on Docker Compose project name
-            prefect_storage_volume = f"{compose_project}_prefect_storage"
-            toolbox_code_volume = f"{compose_project}_toolbox_code"
+            # Hardcoded volume names
+            prefect_storage_volume = "fuzzforge_prefect_storage"
+            toolbox_code_volume = "fuzzforge_toolbox_code"
 
             volumes = [
                 f"{target_path}:/workspace:{volume_mode}",

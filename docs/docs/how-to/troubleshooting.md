@@ -197,7 +197,7 @@ Docker can’t access the path you provided.
 - Check Docker network configuration:
   ```bash
   docker network ls
-  docker network inspect fuzzforge_alpha_default
+  docker network inspect fuzzforge_default
   ```
 - Recreate the network:
   ```bash

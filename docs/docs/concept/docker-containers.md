@@ -111,7 +111,7 @@ Example volume mount:
 ```yaml
 volumes:
   - "/host/path/to/code:/app/target:ro"
-  - "fuzzforge_alpha_prefect_storage:/app/prefect"
+  - "fuzzforge_prefect_storage:/app/prefect"
 ```
 
 ### Volume Security
