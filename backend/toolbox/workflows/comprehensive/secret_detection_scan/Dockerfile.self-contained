@@ -1,0 +1,58 @@
+# Secret Detection Workflow Dockerfile - Self-Contained Version
+# This version copies all required modules into the image for complete isolation
+FROM prefecthq/prefect:3-python3.11
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install TruffleHog
+RUN curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+
+# Install Gitleaks
+RUN wget https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_linux_x64.tar.gz \
+    && tar -xzf gitleaks_linux_x64.tar.gz \
+    && mv gitleaks /usr/local/bin/ \
+    && rm gitleaks_linux_x64.tar.gz
+
+# Verify installations
+RUN trufflehog --version && gitleaks version
+
+# Set working directory
+WORKDIR /opt/prefect
+
+# Create directory structure
+RUN mkdir -p /opt/prefect/toolbox/modules/secret_detection \
+             /opt/prefect/toolbox/modules/reporter \
+             /opt/prefect/toolbox/workflows/comprehensive/secret_detection_scan
+
+# Copy the base module and required modules
+COPY toolbox/modules/base.py /opt/prefect/toolbox/modules/base.py
+COPY toolbox/modules/__init__.py /opt/prefect/toolbox/modules/__init__.py
+COPY toolbox/modules/secret_detection/ /opt/prefect/toolbox/modules/secret_detection/
+COPY toolbox/modules/reporter/ /opt/prefect/toolbox/modules/reporter/
+
+# Copy the workflow code
+COPY toolbox/workflows/comprehensive/secret_detection_scan/ /opt/prefect/toolbox/workflows/comprehensive/secret_detection_scan/
+
+# Copy toolbox init files
+COPY toolbox/__init__.py /opt/prefect/toolbox/__init__.py
+COPY toolbox/workflows/__init__.py /opt/prefect/toolbox/workflows/__init__.py
+COPY toolbox/workflows/comprehensive/__init__.py /opt/prefect/toolbox/workflows/comprehensive/__init__.py
+
+# Install Python dependencies for the modules
+RUN pip install --no-cache-dir \
+    pydantic \
+    asyncio
+
+# Set environment variables
+ENV PYTHONPATH=/opt/prefect/toolbox:/opt/prefect/toolbox/workflows
+ENV WORKFLOW_NAME=secret_detection_scan
+
+# Set default command (can be overridden)
+CMD ["python", "-m", "toolbox.workflows.comprehensive.secret_detection_scan.workflow"]
