@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/static/img/fuzzforge_white.png" alt="FuzzForge Banner" width="20%">
+  <img src="docs/static/img/fuzzforge_banner_github.png" alt="FuzzForge Banner" width="20%">
 </p>
 <h1 align="center">FuzzForge 🚧</h1>
 
