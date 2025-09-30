@@ -97,7 +97,7 @@ uv tool install --python python3.12 .
 
 ## ⚡ Quickstart
 
-Run your first workflow in **3 steps**:
+Run your first workflow :
 
 ```bash
 # 1. Clone the repo
