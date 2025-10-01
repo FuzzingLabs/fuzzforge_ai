@@ -1,0 +1,21 @@
+name: rust_test
+version: 1.0.0
+description: "Simple test workflow for Rust vertical worker"
+vertical: rust
+author: "FuzzForge Team"
+tags:
+  - test
+  - rust
+  - example
+dependencies:
+  python: []
+parameters:
+  - name: target_id
+    type: string
+    required: true
+    description: "UUID of the uploaded target in MinIO"
+  - name: test_message
+    type: string
+    required: false
+    default: "Hello from Rust workflow!"
+    description: "Test message to include in results"

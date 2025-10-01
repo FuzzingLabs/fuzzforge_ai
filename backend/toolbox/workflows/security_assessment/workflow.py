@@ -1,5 +1,8 @@
 """
-Security Assessment Workflow - Comprehensive security analysis using multiple modules
+Security Assessment Workflow - Temporal Version
+
+Comprehensive security analysis using multiple modules.
+Converted from Prefect to Temporal architecture.
 """
 
 # Copyright (c) 2025 FuzzingLabs
@@ -13,240 +16,217 @@ Security Assessment Workflow - Comprehensive security analysis using multiple mo
 #
 # Additional attribution and requirements are provided in the NOTICE file.
 
-import sys
-import logging
+from datetime import timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional
-from prefect import flow, task
-import json
 
-# Add modules to path
-sys.path.insert(0, '/app')
+from temporalio import workflow
+from temporalio.common import RetryPolicy
 
-# Import modules
-from toolbox.modules.scanner import FileScanner
-from toolbox.modules.analyzer import SecurityAnalyzer
-from toolbox.modules.reporter import SARIFReporter
+# Import activity interfaces (will be executed by worker)
+with workflow.unsafe.imports_passed_through():
+    import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@task(name="file_scanning")
-async def scan_files_task(workspace: Path, config: Dict[str, Any]) -> Dict[str, Any]:
+@workflow.defn
+class SecurityAssessmentWorkflow:
     """
-    Task to scan files in the workspace.
-
-    Args:
-        workspace: Path to the workspace
-        config: Scanner configuration
-
-    Returns:
-        Scanner results
-    """
-    logger.info(f"Starting file scanning in {workspace}")
-    scanner = FileScanner()
-
-    result = await scanner.execute(config, workspace)
-
-    logger.info(f"File scanning completed: {result.summary.get('total_files', 0)} files found")
-    return result.dict()
-
-
-@task(name="security_analysis")
-async def analyze_security_task(workspace: Path, config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Task to analyze security vulnerabilities.
-
-    Args:
-        workspace: Path to the workspace
-        config: Analyzer configuration
-
-    Returns:
-        Analysis results
-    """
-    logger.info("Starting security analysis")
-    analyzer = SecurityAnalyzer()
-
-    result = await analyzer.execute(config, workspace)
-
-    logger.info(
-        f"Security analysis completed: {result.summary.get('total_findings', 0)} findings"
-    )
-    return result.dict()
-
-
-@task(name="report_generation")
-async def generate_report_task(
-    scan_results: Dict[str, Any],
-    analysis_results: Dict[str, Any],
-    config: Dict[str, Any],
-    workspace: Path
-) -> Dict[str, Any]:
-    """
-    Task to generate SARIF report from all findings.
-
-    Args:
-        scan_results: Results from scanner
-        analysis_results: Results from analyzer
-        config: Reporter configuration
-        workspace: Path to the workspace
-
-    Returns:
-        SARIF report
-    """
-    logger.info("Generating SARIF report")
-    reporter = SARIFReporter()
-
-    # Combine findings from all modules
-    all_findings = []
-
-    # Add scanner findings (only sensitive files, not all files)
-    scanner_findings = scan_results.get("findings", [])
-    sensitive_findings = [f for f in scanner_findings if f.get("severity") != "info"]
-    all_findings.extend(sensitive_findings)
-
-    # Add analyzer findings
-    analyzer_findings = analysis_results.get("findings", [])
-    all_findings.extend(analyzer_findings)
-
-    # Prepare reporter config
-    reporter_config = {
-        **config,
-        "findings": all_findings,
-        "tool_name": "FuzzForge Security Assessment",
-        "tool_version": "1.0.0"
-    }
-
-    result = await reporter.execute(reporter_config, workspace)
-
-    # Extract SARIF from result
-    sarif = result.dict().get("sarif", {})
-
-    logger.info(f"Report generated with {len(all_findings)} total findings")
-    return sarif
-
-
-@flow(name="security_assessment", log_prints=True)
-async def main_flow(
-    target_path: str = "/workspace",
-    volume_mode: str = "ro",
-    scanner_config: Optional[Dict[str, Any]] = None,
-    analyzer_config: Optional[Dict[str, Any]] = None,
-    reporter_config: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """
-    Main security assessment workflow.
+    Comprehensive security assessment workflow.
 
     This workflow:
-    1. Scans files in the workspace
-    2. Analyzes code for security vulnerabilities
-    3. Generates a SARIF report with all findings
-
-    Args:
-        target_path: Path to the mounted workspace (default: /workspace)
-        volume_mode: Volume mount mode (ro/rw)
-        scanner_config: Configuration for file scanner
-        analyzer_config: Configuration for security analyzer
-        reporter_config: Configuration for SARIF reporter
-
-    Returns:
-        SARIF-formatted findings report
+    1. Downloads target from MinIO
+    2. Scans files in the workspace
+    3. Analyzes code for security vulnerabilities
+    4. Generates a SARIF report with all findings
+    5. Uploads results to MinIO
+    6. Cleans up cache
     """
-    logger.info(f"Starting security assessment workflow")
-    logger.info(f"Workspace: {target_path}, Mode: {volume_mode}")
 
-    # Set workspace path
-    workspace = Path(target_path)
+    @workflow.run
+    async def run(
+        self,
+        target_id: str,
+        scanner_config: Optional[Dict[str, Any]] = None,
+        analyzer_config: Optional[Dict[str, Any]] = None,
+        reporter_config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Main workflow execution.
 
-    if not workspace.exists():
-        logger.error(f"Workspace does not exist: {workspace}")
-        return {
-            "error": f"Workspace not found: {workspace}",
-            "sarif": None
-        }
+        Args:
+            target_id: UUID of the uploaded target in MinIO
+            scanner_config: Configuration for file scanner
+            analyzer_config: Configuration for security analyzer
+            reporter_config: Configuration for SARIF reporter
 
-    # Default configurations
-    if not scanner_config:
-        scanner_config = {
-            "patterns": ["*"],
-            "check_sensitive": True,
-            "calculate_hashes": False,
-            "max_file_size": 10485760  # 10MB
-        }
+        Returns:
+            Dictionary containing SARIF report and summary
+        """
+        workflow_id = workflow.info().workflow_id
 
-    if not analyzer_config:
-        analyzer_config = {
-            "file_extensions": [".py", ".js", ".java", ".php", ".rb", ".go"],
-            "check_secrets": True,
-            "check_sql": True,
-            "check_dangerous_functions": True
-        }
-
-    if not reporter_config:
-        reporter_config = {
-            "include_code_flows": False
-        }
-
-    try:
-        # Execute workflow tasks
-        logger.info("Phase 1: File scanning")
-        scan_results = await scan_files_task(workspace, scanner_config)
-
-        logger.info("Phase 2: Security analysis")
-        analysis_results = await analyze_security_task(workspace, analyzer_config)
-
-        logger.info("Phase 3: Report generation")
-        sarif_report = await generate_report_task(
-            scan_results,
-            analysis_results,
-            reporter_config,
-            workspace
+        workflow.logger.info(
+            f"Starting SecurityAssessmentWorkflow "
+            f"(workflow_id={workflow_id}, target_id={target_id})"
         )
 
-        # Log summary
-        if sarif_report and "runs" in sarif_report:
-            results_count = len(sarif_report["runs"][0].get("results", []))
-            logger.info(f"Workflow completed successfully with {results_count} findings")
-        else:
-            logger.info("Workflow completed successfully")
+        # Default configurations
+        if not scanner_config:
+            scanner_config = {
+                "patterns": ["*"],
+                "check_sensitive": True,
+                "calculate_hashes": False,
+                "max_file_size": 10485760  # 10MB
+            }
 
-        return sarif_report
+        if not analyzer_config:
+            analyzer_config = {
+                "file_extensions": [".py", ".js", ".java", ".php", ".rb", ".go"],
+                "check_secrets": True,
+                "check_sql": True,
+                "check_dangerous_functions": True
+            }
 
-    except Exception as e:
-        logger.error(f"Workflow failed: {e}")
-        # Return error in SARIF format
-        return {
-            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
-            "version": "2.1.0",
-            "runs": [
-                {
-                    "tool": {
-                        "driver": {
-                            "name": "FuzzForge Security Assessment",
-                            "version": "1.0.0"
-                        }
-                    },
-                    "results": [],
-                    "invocations": [
-                        {
-                            "executionSuccessful": False,
-                            "exitCode": 1,
-                            "exitCodeDescription": str(e)
-                        }
-                    ]
-                }
-            ]
+        if not reporter_config:
+            reporter_config = {
+                "include_code_flows": False
+            }
+
+        results = {
+            "workflow_id": workflow_id,
+            "target_id": target_id,
+            "status": "running",
+            "steps": []
         }
 
+        try:
+            # Step 1: Download target from MinIO
+            workflow.logger.info("Step 1: Downloading target from MinIO")
+            target_path = await workflow.execute_activity(
+                "get_target",
+                target_id,
+                start_to_close_timeout=timedelta(minutes=5),
+                retry_policy=RetryPolicy(
+                    initial_interval=timedelta(seconds=1),
+                    maximum_interval=timedelta(seconds=30),
+                    maximum_attempts=3
+                )
+            )
+            results["steps"].append({
+                "step": "download_target",
+                "status": "success",
+                "target_path": target_path
+            })
+            workflow.logger.info(f"✓ Target downloaded to: {target_path}")
 
-if __name__ == "__main__":
-    # For local testing
-    import asyncio
+            # Step 2: File scanning
+            workflow.logger.info("Step 2: Scanning files")
+            scan_results = await workflow.execute_activity(
+                "scan_files",
+                args=[target_path, scanner_config],
+                start_to_close_timeout=timedelta(minutes=10),
+                retry_policy=RetryPolicy(
+                    initial_interval=timedelta(seconds=2),
+                    maximum_interval=timedelta(seconds=60),
+                    maximum_attempts=2
+                )
+            )
+            results["steps"].append({
+                "step": "file_scanning",
+                "status": "success",
+                "files_scanned": scan_results.get("summary", {}).get("total_files", 0)
+            })
+            workflow.logger.info(
+                f"✓ File scanning completed: "
+                f"{scan_results.get('summary', {}).get('total_files', 0)} files"
+            )
 
-    asyncio.run(main_flow(
-        target_path="/tmp/test",
-        scanner_config={"patterns": ["*.py"]},
-        analyzer_config={"check_secrets": True}
-    ))
+            # Step 3: Security analysis
+            workflow.logger.info("Step 3: Analyzing security vulnerabilities")
+            analysis_results = await workflow.execute_activity(
+                "analyze_security",
+                args=[target_path, analyzer_config],
+                start_to_close_timeout=timedelta(minutes=15),
+                retry_policy=RetryPolicy(
+                    initial_interval=timedelta(seconds=2),
+                    maximum_interval=timedelta(seconds=60),
+                    maximum_attempts=2
+                )
+            )
+            results["steps"].append({
+                "step": "security_analysis",
+                "status": "success",
+                "findings": analysis_results.get("summary", {}).get("total_findings", 0)
+            })
+            workflow.logger.info(
+                f"✓ Security analysis completed: "
+                f"{analysis_results.get('summary', {}).get('total_findings', 0)} findings"
+            )
+
+            # Step 4: Generate SARIF report
+            workflow.logger.info("Step 4: Generating SARIF report")
+            sarif_report = await workflow.execute_activity(
+                "generate_sarif_report",
+                args=[scan_results, analysis_results, reporter_config, target_path],
+                start_to_close_timeout=timedelta(minutes=5)
+            )
+            results["steps"].append({
+                "step": "report_generation",
+                "status": "success"
+            })
+
+            # Count total findings in SARIF
+            total_findings = 0
+            if sarif_report and "runs" in sarif_report:
+                total_findings = len(sarif_report["runs"][0].get("results", []))
+
+            workflow.logger.info(f"✓ SARIF report generated with {total_findings} findings")
+
+            # Step 5: Upload results to MinIO
+            workflow.logger.info("Step 5: Uploading results")
+            try:
+                results_url = await workflow.execute_activity(
+                    "upload_results",
+                    args=[workflow_id, sarif_report, "sarif"],
+                    start_to_close_timeout=timedelta(minutes=2)
+                )
+                results["results_url"] = results_url
+                workflow.logger.info(f"✓ Results uploaded to: {results_url}")
+            except Exception as e:
+                workflow.logger.warning(f"Failed to upload results: {e}")
+                results["results_url"] = None
+
+            # Step 6: Cleanup cache
+            workflow.logger.info("Step 6: Cleaning up cache")
+            try:
+                await workflow.execute_activity(
+                    "cleanup_cache",
+                    target_path,
+                    start_to_close_timeout=timedelta(minutes=1)
+                )
+                workflow.logger.info("✓ Cache cleaned up")
+            except Exception as e:
+                workflow.logger.warning(f"Cache cleanup failed: {e}")
+
+            # Mark workflow as successful
+            results["status"] = "success"
+            results["sarif"] = sarif_report
+            results["summary"] = {
+                "total_findings": total_findings,
+                "files_scanned": scan_results.get("summary", {}).get("total_files", 0)
+            }
+            workflow.logger.info(f"✓ Workflow completed successfully: {workflow_id}")
+
+            return results
+
+        except Exception as e:
+            workflow.logger.error(f"Workflow failed: {e}")
+            results["status"] = "error"
+            results["error"] = str(e)
+            results["steps"].append({
+                "step": "error",
+                "status": "failed",
+                "error": str(e)
+            })
+            raise

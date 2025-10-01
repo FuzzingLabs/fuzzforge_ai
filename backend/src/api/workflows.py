@@ -25,7 +25,7 @@ from src.models.findings import (
     WorkflowListItem,
     RunSubmissionResponse
 )
-from src.core.workflow_discovery import WorkflowDiscovery
+from src.temporal.discovery import WorkflowDiscovery
 
 logger = logging.getLogger(__name__)
 
@@ -68,15 +68,15 @@ def create_structured_error_response(
     return error_response
 
 
-def get_prefect_manager():
-    """Dependency to get the Prefect manager instance"""
-    from src.main import prefect_mgr
-    return prefect_mgr
+def get_temporal_manager():
+    """Dependency to get the Temporal manager instance"""
+    from src.main import temporal_mgr
+    return temporal_mgr
 
 
 @router.get("/", response_model=List[WorkflowListItem])
 async def list_workflows(
-    prefect_mgr=Depends(get_prefect_manager)
+    temporal_mgr=Depends(get_temporal_manager)
 ) -> List[WorkflowListItem]:
     """
     List all discovered workflows with their metadata.
@@ -85,7 +85,7 @@ async def list_workflows(
     author, and tags.
     """
     workflows = []
-    for name, info in prefect_mgr.workflows.items():
+    for name, info in temporal_mgr.workflows.items():
         workflows.append(WorkflowListItem(
             name=name,
             version=info.metadata.get("version", "0.6.0"),
@@ -111,7 +111,7 @@ async def get_metadata_schema() -> Dict[str, Any]:
 @router.get("/{workflow_name}/metadata", response_model=WorkflowMetadata)
 async def get_workflow_metadata(
     workflow_name: str,
-    prefect_mgr=Depends(get_prefect_manager)
+    temporal_mgr=Depends(get_temporal_manager)
 ) -> WorkflowMetadata:
     """
     Get complete metadata for a specific workflow.
@@ -126,8 +126,8 @@ async def get_workflow_metadata(
     Raises:
         HTTPException: 404 if workflow not found
     """
-    if workflow_name not in prefect_mgr.workflows:
-        available_workflows = list(prefect_mgr.workflows.keys())
+    if workflow_name not in temporal_mgr.workflows:
+        available_workflows = list(temporal_mgr.workflows.keys())
         error_response = create_structured_error_response(
             error_type="WorkflowNotFound",
             message=f"Workflow '{workflow_name}' not found",
@@ -143,7 +143,7 @@ async def get_workflow_metadata(
             detail=error_response
         )
 
-    info = prefect_mgr.workflows[workflow_name]
+    info = temporal_mgr.workflows[workflow_name]
     metadata = info.metadata
 
     return WorkflowMetadata(
@@ -156,7 +156,7 @@ async def get_workflow_metadata(
         default_parameters=metadata.get("default_parameters", {}),
         required_modules=metadata.get("required_modules", []),
         supported_volume_modes=metadata.get("supported_volume_modes", ["ro", "rw"]),
-        has_custom_docker=info.has_docker
+        has_custom_docker=metadata.get("has_docker", False)
     )
 
 
@@ -164,14 +164,14 @@ async def get_workflow_metadata(
 async def submit_workflow(
     workflow_name: str,
     submission: WorkflowSubmission,
-    prefect_mgr=Depends(get_prefect_manager)
+    temporal_mgr=Depends(get_temporal_manager)
 ) -> RunSubmissionResponse:
     """
-    Submit a workflow for execution with volume mounting.
+    Submit a workflow for execution.
 
     Args:
         workflow_name: Name of the workflow to execute
-        submission: Submission parameters including target path and volume mode
+        submission: Submission parameters including target path and parameters
 
     Returns:
         Run submission response with run_id and initial status
@@ -179,8 +179,8 @@ async def submit_workflow(
     Raises:
         HTTPException: 404 if workflow not found, 400 for invalid parameters
     """
-    if workflow_name not in prefect_mgr.workflows:
-        available_workflows = list(prefect_mgr.workflows.keys())
+    if workflow_name not in temporal_mgr.workflows:
+        available_workflows = list(temporal_mgr.workflows.keys())
         error_response = create_structured_error_response(
             error_type="WorkflowNotFound",
             message=f"Workflow '{workflow_name}' not found",
@@ -197,31 +197,32 @@ async def submit_workflow(
         )
 
     try:
-        # Convert ResourceLimits to dict if provided
-        resource_limits_dict = None
-        if submission.resource_limits:
-            resource_limits_dict = {
-                "cpu_limit": submission.resource_limits.cpu_limit,
-                "memory_limit": submission.resource_limits.memory_limit,
-                "cpu_request": submission.resource_limits.cpu_request,
-                "memory_request": submission.resource_limits.memory_request
-            }
+        # Upload target file to MinIO and get target_id
+        target_path = Path(submission.target_path)
+        if not target_path.exists():
+            raise ValueError(f"Target path does not exist: {submission.target_path}")
 
-        # Submit the workflow with enhanced parameters
-        flow_run = await prefect_mgr.submit_workflow(
-            workflow_name=workflow_name,
-            target_path=submission.target_path,
-            volume_mode=submission.volume_mode,
-            parameters=submission.parameters,
-            resource_limits=resource_limits_dict,
-            additional_volumes=submission.additional_volumes,
-            timeout=submission.timeout
+        # Upload target (using anonymous user for now)
+        target_id = await temporal_mgr.upload_target(
+            file_path=target_path,
+            user_id="api-user",
+            metadata={"workflow": workflow_name}
         )
 
-        run_id = str(flow_run.id)
+        # Prepare workflow parameters
+        workflow_params = submission.parameters or {}
+
+        # Start workflow execution
+        handle = await temporal_mgr.run_workflow(
+            workflow_name=workflow_name,
+            target_id=target_id,
+            workflow_params=workflow_params
+        )
+
+        run_id = handle.id
 
         # Initialize fuzzing tracking if this looks like a fuzzing workflow
-        workflow_info = prefect_mgr.workflows.get(workflow_name, {})
+        workflow_info = temporal_mgr.workflows.get(workflow_name, {})
         workflow_tags = workflow_info.metadata.get("tags", []) if hasattr(workflow_info, 'metadata') else []
         if "fuzzing" in workflow_tags or "fuzz" in workflow_name.lower():
             from src.api.fuzzing import initialize_fuzzing_tracking
@@ -229,7 +230,7 @@ async def submit_workflow(
 
         return RunSubmissionResponse(
             run_id=run_id,
-            status=flow_run.state.name if flow_run.state else "PENDING",
+            status="RUNNING",
             workflow=workflow_name,
             message=f"Workflow '{workflow_name}' submitted successfully"
         )
@@ -261,17 +262,13 @@ async def submit_workflow(
         error_type = "WorkflowSubmissionError"
 
         # Detect specific error patterns
-        if "deployment" in error_message.lower():
-            error_type = "DeploymentError"
-            deployment_info = {
-                "status": "failed",
-                "error": error_message
-            }
+        if "workflow" in error_message.lower() and "not found" in error_message.lower():
+            error_type = "WorkflowError"
             suggestions.extend([
-                "Check if Prefect server is running and accessible",
-                "Verify Docker is running and has sufficient resources",
-                "Check container image availability",
-                "Ensure volume paths exist and are accessible"
+                "Check if Temporal server is running and accessible",
+                "Verify workflow workers are running",
+                "Check if workflow is registered with correct vertical",
+                "Ensure Docker is running and has sufficient resources"
             ])
 
         elif "volume" in error_message.lower() or "mount" in error_message.lower():
@@ -327,7 +324,7 @@ async def submit_workflow(
 @router.get("/{workflow_name}/parameters")
 async def get_workflow_parameters(
     workflow_name: str,
-    prefect_mgr=Depends(get_prefect_manager)
+    temporal_mgr=Depends(get_temporal_manager)
 ) -> Dict[str, Any]:
     """
     Get the parameters schema for a workflow.
@@ -341,8 +338,8 @@ async def get_workflow_parameters(
     Raises:
         HTTPException: 404 if workflow not found
     """
-    if workflow_name not in prefect_mgr.workflows:
-        available_workflows = list(prefect_mgr.workflows.keys())
+    if workflow_name not in temporal_mgr.workflows:
+        available_workflows = list(temporal_mgr.workflows.keys())
         error_response = create_structured_error_response(
             error_type="WorkflowNotFound",
             message=f"Workflow '{workflow_name}' not found",
@@ -357,7 +354,7 @@ async def get_workflow_parameters(
             detail=error_response
         )
 
-    info = prefect_mgr.workflows[workflow_name]
+    info = temporal_mgr.workflows[workflow_name]
     metadata = info.metadata
 
     # Return parameters with enhanced schema information

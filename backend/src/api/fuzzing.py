@@ -25,7 +25,6 @@ from src.models.findings import (
     FuzzingStats,
     CrashReport
 )
-from src.core.workflow_discovery import WorkflowDiscovery
 
 logger = logging.getLogger(__name__)
 

@@ -24,22 +24,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-def get_prefect_manager():
-    """Dependency to get the Prefect manager instance"""
-    from src.main import prefect_mgr
-    return prefect_mgr
+def get_temporal_manager():
+    """Dependency to get the Temporal manager instance"""
+    from src.main import temporal_mgr
+    return temporal_mgr
 
 
 @router.get("/{run_id}/status", response_model=WorkflowStatus)
 async def get_run_status(
     run_id: str,
-    prefect_mgr=Depends(get_prefect_manager)
+    temporal_mgr=Depends(get_temporal_manager)
 ) -> WorkflowStatus:
     """
     Get the current status of a workflow run.
 
     Args:
-        run_id: The flow run ID
+        run_id: The workflow run ID
 
     Returns:
         Status information including state, timestamps, and completion flags
@@ -48,25 +48,23 @@ async def get_run_status(
         HTTPException: 404 if run not found
     """
     try:
-        status = await prefect_mgr.get_flow_run_status(run_id)
+        status = await temporal_mgr.get_workflow_status(run_id)
 
-        # Find workflow name from deployment
-        workflow_name = "unknown"
-        workflow_deployment_id = status.get("workflow", "")
-        for name, deployment_id in prefect_mgr.deployments.items():
-            if str(deployment_id) == str(workflow_deployment_id):
-                workflow_name = name
-                break
+        # Map Temporal status to response format
+        workflow_status = status.get("status", "UNKNOWN")
+        is_completed = workflow_status in ["COMPLETED", "FAILED", "CANCELLED"]
+        is_failed = workflow_status == "FAILED"
+        is_running = workflow_status == "RUNNING"
 
         return WorkflowStatus(
-            run_id=status["run_id"],
-            workflow=workflow_name,
-            status=status["status"],
-            is_completed=status["is_completed"],
-            is_failed=status["is_failed"],
-            is_running=status["is_running"],
-            created_at=status["created_at"],
-            updated_at=status["updated_at"]
+            run_id=run_id,
+            workflow="unknown",  # Temporal doesn't track workflow name in status
+            status=workflow_status,
+            is_completed=is_completed,
+            is_failed=is_failed,
+            is_running=is_running,
+            created_at=status.get("start_time"),
+            updated_at=status.get("close_time") or status.get("execution_time")
         )
 
     except Exception as e:
@@ -80,13 +78,13 @@ async def get_run_status(
 @router.get("/{run_id}/findings", response_model=WorkflowFindings)
 async def get_run_findings(
     run_id: str,
-    prefect_mgr=Depends(get_prefect_manager)
+    temporal_mgr=Depends(get_temporal_manager)
 ) -> WorkflowFindings:
     """
     Get the findings from a completed workflow run.
 
     Args:
-        run_id: The flow run ID
+        run_id: The workflow run ID
 
     Returns:
         SARIF-formatted findings from the workflow execution
@@ -96,50 +94,46 @@ async def get_run_findings(
     """
     try:
         # Get run status first
-        status = await prefect_mgr.get_flow_run_status(run_id)
+        status = await temporal_mgr.get_workflow_status(run_id)
+        workflow_status = status.get("status", "UNKNOWN")
 
-        if not status["is_completed"]:
-            if status["is_running"]:
+        if workflow_status not in ["COMPLETED", "FAILED", "CANCELLED"]:
+            if workflow_status == "RUNNING":
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Run {run_id} is still running. Current status: {status['status']}"
-                )
-            elif status["is_failed"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Run {run_id} failed. Status: {status['status']}"
+                    detail=f"Run {run_id} is still running. Current status: {workflow_status}"
                 )
             else:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Run {run_id} not completed. Status: {status['status']}"
+                    detail=f"Run {run_id} not completed. Status: {workflow_status}"
                 )
 
-        # Get the findings
-        findings = await prefect_mgr.get_flow_run_findings(run_id)
+        if workflow_status == "FAILED":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Run {run_id} failed. Status: {workflow_status}"
+            )
 
-        # Find workflow name
-        workflow_name = "unknown"
-        workflow_deployment_id = status.get("workflow", "")
-        for name, deployment_id in prefect_mgr.deployments.items():
-            if str(deployment_id) == str(workflow_deployment_id):
-                workflow_name = name
-                break
+        # Get the workflow result
+        result = await temporal_mgr.get_workflow_result(run_id)
 
-        # Get workflow version if available
+        # Extract SARIF from result
+        if isinstance(result, dict):
+            sarif = result.get("sarif", {})
+        else:
+            sarif = {}
+
+        # Metadata
         metadata = {
-            "completion_time": status["updated_at"],
+            "completion_time": status.get("close_time"),
             "workflow_version": "unknown"
         }
 
-        if workflow_name in prefect_mgr.workflows:
-            workflow_info = prefect_mgr.workflows[workflow_name]
-            metadata["workflow_version"] = workflow_info.metadata.get("version", "unknown")
-
         return WorkflowFindings(
-            workflow=workflow_name,
+            workflow="unknown",
             run_id=run_id,
-            sarif=findings,
+            sarif=sarif,
             metadata=metadata
         )
 
@@ -157,7 +151,7 @@ async def get_run_findings(
 async def get_workflow_findings(
     workflow_name: str,
     run_id: str,
-    prefect_mgr=Depends(get_prefect_manager)
+    temporal_mgr=Depends(get_temporal_manager)
 ) -> WorkflowFindings:
     """
     Get findings for a specific workflow run.
@@ -166,7 +160,7 @@ async def get_workflow_findings(
 
     Args:
         workflow_name: Name of the workflow
-        run_id: The flow run ID
+        run_id: The workflow run ID
 
     Returns:
         SARIF-formatted findings from the workflow execution
@@ -174,11 +168,11 @@ async def get_workflow_findings(
     Raises:
         HTTPException: 404 if workflow or run not found, 400 if run not completed
     """
-    if workflow_name not in prefect_mgr.workflows:
+    if workflow_name not in temporal_mgr.workflows:
         raise HTTPException(
             status_code=404,
             detail=f"Workflow not found: {workflow_name}"
         )
 
     # Delegate to the main findings endpoint
-    return await get_run_findings(run_id, prefect_mgr)
+    return await get_run_findings(run_id, temporal_mgr)
