@@ -81,6 +81,39 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 **Docker**
 For containerized workflows, see the [Docker Installation Guide](https://docs.docker.com/get-docker/).
 
+#### Configure Docker Daemon
+
+Before running `docker compose up`, configure Docker to allow insecure registries (required for the local registry).
+
+Add the following to your Docker daemon configuration:
+
+```json
+{
+  "insecure-registries": [
+    "localhost:5000",
+    "host.docker.internal:5001",
+    "registry:5000"
+  ]
+}
+```
+
+**macOS (Docker Desktop):**
+1. Open Docker Desktop
+2. Go to Settings → Docker Engine
+3. Add the `insecure-registries` configuration to the JSON
+4. Click "Apply & Restart"
+
+**Linux:**
+1. Edit `/etc/docker/daemon.json` (create if it doesn't exist):
+   ```bash
+   sudo nano /etc/docker/daemon.json
+   ```
+2. Add the configuration above
+3. Restart Docker:
+   ```bash
+   sudo systemctl restart docker
+   ```
+
 ### CLI Installation
 
 After installing the requirements, install the FuzzForge CLI:
