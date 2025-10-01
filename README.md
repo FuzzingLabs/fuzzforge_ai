@@ -135,8 +135,8 @@ Run your first workflow :
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/fuzzinglabs/fuzzforge.git
-cd fuzzforge
+git clone https://github.com/fuzzinglabs/fuzzforge_ai.git
+cd fuzzforge_ai
 
 # 2. Build & run with Docker
 # Set registry host for your OS (local registry is mandatory)
@@ -162,7 +162,7 @@ ff workflow run security_assessment . # Start a workflow (you can also use ff co
 
 _Setting up and running security workflows through the interface_
 
-👉 More installation options in the [Documentation](https://fuzzforge.ai/docs).
+👉 More installation options in the [Documentation](https://docs.fuzzforge.ai).
 
 ---
 
@@ -175,7 +175,7 @@ _AI agents automatically analyzing code and providing security insights_
 ## 📚 Resources
 
 - 🌐 [Website](https://fuzzforge.ai)
-- 📖 [Documentation](https://fuzzforge.ai/docs)
+- 📖 [Documentation](https://docs.fuzzforge.ai)
 - 💬 [Community Discord](https://discord.com/invite/acqv9FVG)
 - 🎓 [FuzzingLabs Academy](https://academy.fuzzinglabs.com/?coupon=GITHUB_FUZZFORGE)
 
