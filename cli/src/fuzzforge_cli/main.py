@@ -24,7 +24,6 @@ from .commands import (
     findings,
     ingest,
     init,
-    monitor,
     workflow_exec,
     workflows,
 )
@@ -213,12 +212,6 @@ def run_workflow(
     wait: bool = typer.Option(
         False, "--wait", "-w", help="Wait for execution to complete"
     ),
-    live: bool = typer.Option(
-        False,
-        "--live",
-        "-l",
-        help="Start live monitoring after execution (useful for fuzzing workflows)",
-    ),
 ):
     """
     🚀 Execute a security testing workflow
@@ -234,7 +227,6 @@ def run_workflow(
         timeout=timeout,
         interactive=interactive,
         wait=wait,
-        live=live,
     )
 
 
@@ -372,7 +364,6 @@ app.add_typer(workflow_app, name="workflow", help="🚀 Execute and manage workf
 app.add_typer(finding_app, name="finding", help="🔍 View and analyze findings")
 
 # Other command groups
-app.add_typer(monitor.app, name="monitor", help="📊 Real-time monitoring")
 app.add_typer(ai.app, name="ai", help="🤖 AI integration features")
 app.add_typer(ingest.app, name="ingest", help="🧠 Ingest knowledge into AI")
 
@@ -393,12 +384,10 @@ def examples():
 
 [bold]Execute Workflows:[/bold]
   ff workflow afl-fuzzing ./target  # Run fuzzing on target
-  ff workflow afl-fuzzing . --live  # Run with live monitoring
 
 [bold]Monitor Execution:[/bold]
   ff status                         # Check latest execution
   ff workflow status                # Same as above
-  ff monitor                        # Live monitoring dashboard
   ff workflow history               # Show past executions
 
 [bold]Review Findings:[/bold]
