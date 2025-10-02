@@ -27,47 +27,13 @@ class WorkflowFindings(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
-class ResourceLimits(BaseModel):
-    """Resource limits for workflow execution"""
-    cpu_limit: Optional[str] = Field(None, description="CPU limit (e.g., '2' for 2 cores, '500m' for 0.5 cores)")
-    memory_limit: Optional[str] = Field(None, description="Memory limit (e.g., '1Gi', '512Mi')")
-    cpu_request: Optional[str] = Field(None, description="CPU request (guaranteed)")
-    memory_request: Optional[str] = Field(None, description="Memory request (guaranteed)")
-
-
-class VolumeMount(BaseModel):
-    """Volume mount specification"""
-    host_path: str = Field(..., description="Host path to mount")
-    container_path: str = Field(..., description="Container path for mount")
-    mode: Literal["ro", "rw"] = Field(default="ro", description="Mount mode")
-
-    @field_validator("host_path")
-    @classmethod
-    def validate_host_path(cls, v):
-        """Validate that the host path is absolute (existence checked at runtime)"""
-        path = Path(v)
-        if not path.is_absolute():
-            raise ValueError(f"Host path must be absolute: {v}")
-        # Note: Path existence is validated at workflow runtime
-        # We can't validate existence here as this runs inside Docker container
-        return str(path)
-
-    @field_validator("container_path")
-    @classmethod
-    def validate_container_path(cls, v):
-        """Validate that the container path is absolute"""
-        if not v.startswith('/'):
-            raise ValueError(f"Container path must be absolute: {v}")
-        return v
-
-
 class WorkflowSubmission(BaseModel):
-    """Submit a workflow with configurable settings"""
-    target_path: str = Field(..., description="Absolute path to analyze")
-    volume_mode: Literal["ro", "rw"] = Field(
-        default="ro",
-        description="Volume mount mode: read-only (ro) or read-write (rw)"
-    )
+    """
+    Submit a workflow with configurable settings.
+
+    Note: This model is deprecated in favor of the /upload-and-submit endpoint
+    which handles file uploads directly.
+    """
     parameters: Dict[str, Any] = Field(
         default_factory=dict,
         description="Workflow-specific parameters"
@@ -78,25 +44,6 @@ class WorkflowSubmission(BaseModel):
         ge=1,
         le=604800  # Max 7 days to support fuzzing campaigns
     )
-    resource_limits: Optional[ResourceLimits] = Field(
-        None,
-        description="Resource limits for workflow container"
-    )
-    additional_volumes: List[VolumeMount] = Field(
-        default_factory=list,
-        description="Additional volume mounts (e.g., for corpus, output directories)"
-    )
-
-    @field_validator("target_path")
-    @classmethod
-    def validate_path(cls, v):
-        """Validate that the target path is absolute (existence checked at runtime)"""
-        path = Path(v)
-        if not path.is_absolute():
-            raise ValueError(f"Path must be absolute: {v}")
-        # Note: Path existence is validated at workflow runtime when volumes are mounted
-        # We can't validate existence here as this runs inside Docker container
-        return str(path)
 
 
 class WorkflowStatus(BaseModel):

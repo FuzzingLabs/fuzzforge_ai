@@ -2,7 +2,6 @@
 Security Assessment Workflow - Temporal Version
 
 Comprehensive security analysis using multiple modules.
-Converted from Prefect to Temporal architecture.
 """
 
 # Copyright (c) 2025 FuzzingLabs

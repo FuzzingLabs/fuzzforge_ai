@@ -11,12 +11,6 @@ tags:
   - "coverage"
   - "security"
 
-supported_volume_modes:
-  - "ro"
-
-default_volume_mode: "ro"
-default_target_path: "/workspace"
-
 requirements:
   tools:
     - "atheris_fuzzer"

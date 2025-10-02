@@ -167,7 +167,6 @@ async def get_workflow_metadata(
         parameters=metadata.get("parameters", {}),
         default_parameters=metadata.get("default_parameters", {}),
         required_modules=metadata.get("required_modules", []),
-        supported_volume_modes=metadata.get("supported_volume_modes", ["ro", "rw"]),
         has_custom_docker=metadata.get("has_docker", False)
     )
 
@@ -341,7 +340,6 @@ async def upload_and_submit_workflow(
     workflow_name: str,
     file: UploadFile = File(..., description="Target file or tarball to analyze"),
     parameters: Optional[str] = Form(None, description="JSON-encoded workflow parameters"),
-    volume_mode: str = Form("ro", description="Volume mount mode (ro/rw)"),
     timeout: Optional[int] = Form(None, description="Timeout in seconds"),
     temporal_mgr=Depends(get_temporal_manager)
 ) -> RunSubmissionResponse:
@@ -355,7 +353,6 @@ async def upload_and_submit_workflow(
         workflow_name: Name of the workflow to execute
         file: Target file or tarball (compressed directory)
         parameters: JSON string of workflow parameters (optional)
-        volume_mode: Volume mount mode - "ro" (read-only) or "rw" (read-write)
         timeout: Execution timeout in seconds (optional)
 
     Returns:

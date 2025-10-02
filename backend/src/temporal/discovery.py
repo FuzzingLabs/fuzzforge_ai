@@ -253,12 +253,6 @@ class WorkflowDiscovery:
                     "items": {"type": "string"},
                     "description": "Required module names"
                 },
-                "supported_volume_modes": {
-                    "type": "array",
-                    "items": {"enum": ["ro", "rw"]},
-                    "default": ["ro", "rw"],
-                    "description": "Supported volume mount modes"
-                },
                 "has_docker": {
                     "type": "boolean",
                     "default": False,

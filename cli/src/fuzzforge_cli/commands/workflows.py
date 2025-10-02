@@ -100,7 +100,6 @@ def workflow_info(
             info_table.add_row("Author", workflow.author)
         if workflow.tags:
             info_table.add_row("Tags", ", ".join(workflow.tags))
-        info_table.add_row("Volume Modes", ", ".join(workflow.supported_volume_modes))
         info_table.add_row("Custom Docker", "✅ Yes" if workflow.has_custom_docker else "❌ No")
 
         console.print(

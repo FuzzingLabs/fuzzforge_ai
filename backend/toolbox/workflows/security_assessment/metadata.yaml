@@ -12,13 +12,6 @@ tags:
   - "sarif"
   - "comprehensive"
 
-supported_volume_modes:
-  - "ro"
-  - "rw"
-
-default_volume_mode: "ro"
-default_target_path: "/workspace"
-
 requirements:
   tools:
     - "file_scanner"
@@ -32,8 +25,6 @@ requirements:
 has_docker: true
 
 default_parameters:
-  target_path: "/workspace"
-  volume_mode: "ro"
   scanner_config: {}
   analyzer_config: {}
   reporter_config: {}
@@ -41,15 +32,6 @@ default_parameters:
 parameters:
   type: object
   properties:
-    target_path:
-      type: string
-      default: "/workspace"
-      description: "Path to analyze"
-    volume_mode:
-      type: string
-      enum: ["ro", "rw"]
-      default: "ro"
-      description: "Volume mount mode"
     scanner_config:
       type: object
       description: "File scanner configuration"

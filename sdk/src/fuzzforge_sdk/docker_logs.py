@@ -87,11 +87,6 @@ class DockerLogIntegration:
                 r'network is unreachable',
                 r'connection refused',
                 r'timeout.*connect'
-            ],
-            'prefect_error': [
-                r'prefect.*error',
-                r'flow run failed',
-                r'task.*failed'
             ]
         }
 
@@ -380,13 +375,6 @@ class DockerLogIntegration:
                 "Check network connectivity",
                 "Verify backend services are running (docker-compose up -d)",
                 "Check firewall settings and port availability"
-            ])
-
-        if 'prefect_error' in error_analysis:
-            suggestions.extend([
-                "Check Prefect server connectivity",
-                "Verify workflow deployment is successful",
-                "Review workflow-specific parameters and requirements"
             ])
 
         if not suggestions:

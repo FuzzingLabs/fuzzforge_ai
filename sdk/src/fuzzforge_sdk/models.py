@@ -22,43 +22,13 @@ from datetime import datetime
 from pathlib import Path
 
 
-class ResourceLimits(BaseModel):
-    """Resource limits for workflow execution"""
-    cpu_limit: Optional[str] = Field(None, description="CPU limit (e.g., '2' for 2 cores, '500m' for 0.5 cores)")
-    memory_limit: Optional[str] = Field(None, description="Memory limit (e.g., '1Gi', '512Mi')")
-    cpu_request: Optional[str] = Field(None, description="CPU request (guaranteed)")
-    memory_request: Optional[str] = Field(None, description="Memory request (guaranteed)")
-
-
-class VolumeMount(BaseModel):
-    """Volume mount specification"""
-    host_path: str = Field(..., description="Host path to mount")
-    container_path: str = Field(..., description="Container path for mount")
-    mode: Literal["ro", "rw"] = Field(default="ro", description="Mount mode")
-
-    @validator("host_path")
-    def validate_host_path(cls, v):
-        """Validate that the host path is absolute"""
-        path = Path(v)
-        if not path.is_absolute():
-            raise ValueError(f"Host path must be absolute: {v}")
-        return str(path)
-
-    @validator("container_path")
-    def validate_container_path(cls, v):
-        """Validate that the container path is absolute"""
-        if not v.startswith('/'):
-            raise ValueError(f"Container path must be absolute: {v}")
-        return v
-
-
 class WorkflowSubmission(BaseModel):
-    """Submit a workflow with configurable settings"""
-    target_path: str = Field(..., description="Absolute path to analyze")
-    volume_mode: Literal["ro", "rw"] = Field(
-        default="ro",
-        description="Volume mount mode: read-only (ro) or read-write (rw)"
-    )
+    """
+    Submit a workflow with configurable settings.
+
+    Note: This model is deprecated in favor of direct file upload via
+    submit_workflow_with_upload() which handles file uploads automatically.
+    """
     parameters: Dict[str, Any] = Field(
         default_factory=dict,
         description="Workflow-specific parameters"
@@ -69,22 +39,6 @@ class WorkflowSubmission(BaseModel):
         ge=1,
         le=604800  # Max 7 days
     )
-    resource_limits: Optional[ResourceLimits] = Field(
-        None,
-        description="Resource limits for workflow container"
-    )
-    additional_volumes: List[VolumeMount] = Field(
-        default_factory=list,
-        description="Additional volume mounts"
-    )
-
-    @validator("target_path")
-    def validate_path(cls, v):
-        """Validate that the target path is absolute"""
-        path = Path(v)
-        if not path.is_absolute():
-            raise ValueError(f"Path must be absolute: {v}")
-        return str(path)
 
 
 class WorkflowListItem(BaseModel):
@@ -111,10 +65,6 @@ class WorkflowMetadata(BaseModel):
     required_modules: List[str] = Field(
         default_factory=list,
         description="Required module names"
-    )
-    supported_volume_modes: List[Literal["ro", "rw"]] = Field(
-        default=["ro", "rw"],
-        description="Supported volume mount modes"
     )
     has_custom_docker: bool = Field(
         default=False,

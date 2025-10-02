@@ -100,7 +100,6 @@ class TemporalManager:
         """Close Temporal client connection."""
         if self.client:
             # Temporal client doesn't need explicit close in Python SDK
-            # but we keep this for symmetry with PrefectManager
             pass
 
     async def get_workflows(self) -> Dict[str, WorkflowInfo]:
@@ -186,17 +185,11 @@ class TemporalManager:
         # The workflow parameters are passed as individual positional args
         workflow_args = [target_id]
 
-        # Filter out metadata-only parameters (target_path, volume_mode)
-        # These are used by the system but NOT passed to the workflow
-        metadata_only_params = {"target_path", "volume_mode"}
-
         # Add parameters in order based on workflow signature
         # For security_assessment: scanner_config, analyzer_config, reporter_config
         # For atheris_fuzzing: target_file, max_iterations, timeout_seconds
         if workflow_params:
-            # Only add parameters that are NOT metadata-only
-            filtered_params = {k: v for k, v in workflow_params.items() if k not in metadata_only_params}
-            workflow_args.extend(filtered_params.values())
+            workflow_args.extend(workflow_params.values())
 
         # Determine task queue from workflow vertical
         vertical = workflow_info.metadata.get("vertical", "default")
