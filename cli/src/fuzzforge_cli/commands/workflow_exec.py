@@ -77,7 +77,7 @@ def execute_workflow_submission(
     timeout: Optional[int],
     interactive: bool
 ) -> Any:
-    """Handle the workflow submission process"""
+    """Handle the workflow submission process with file upload"""
     # Get workflow metadata for parameter validation
     console.print(f"🔧 Getting workflow information for: {workflow}")
     workflow_meta = client.get_workflow_metadata(workflow)
@@ -87,7 +87,7 @@ def execute_workflow_submission(
     if interactive and workflow_meta.parameters.get("properties"):
         properties = workflow_meta.parameters.get("properties", {})
         required_params = set(workflow_meta.parameters.get("required", []))
-        defaults = param_response.defaults
+        defaults = param_response.default_parameters
 
         missing_required = required_params - set(parameters.keys())
 
@@ -131,14 +131,6 @@ def execute_workflow_submission(
             f"one of: {', '.join(workflow_meta.supported_volume_modes)}"
         )
 
-    # Create submission
-    submission = WorkflowSubmission(
-        target_path=target_path,
-        volume_mode=volume_mode,
-        parameters=parameters,
-        timeout=timeout
-    )
-
     # Show submission summary
     console.print(f"\n🎯 [bold]Executing workflow:[/bold]")
     console.print(f"   Workflow: {workflow}")
@@ -148,6 +140,22 @@ def execute_workflow_submission(
         console.print(f"   Parameters: {len(parameters)} provided")
     if timeout:
         console.print(f"   Timeout: {timeout}s")
+
+    # Check if target path exists locally
+    target_path_obj = Path(target_path)
+    use_upload = target_path_obj.exists()
+
+    if use_upload:
+        # Show file/directory info
+        if target_path_obj.is_dir():
+            num_files = sum(1 for _ in target_path_obj.rglob("*") if _.is_file())
+            console.print(f"   Upload: Directory with {num_files} files")
+        else:
+            size_mb = target_path_obj.stat().st_size / (1024 * 1024)
+            console.print(f"   Upload: File ({size_mb:.2f} MB)")
+    else:
+        console.print(f"   [yellow]⚠️  Warning: Target path does not exist locally[/yellow]")
+        console.print(f"   [yellow]   Attempting to use path-based submission (backend must have access)[/yellow]")
 
     # Only ask for confirmation in interactive mode
     if interactive:
@@ -160,32 +168,75 @@ def execute_workflow_submission(
     # Submit the workflow with enhanced progress
     console.print(f"\n🚀 Executing workflow: [bold yellow]{workflow}[/bold yellow]")
 
-    steps = [
-        "Validating workflow configuration",
-        "Connecting to FuzzForge API",
-        "Uploading parameters and settings",
-        "Creating workflow deployment",
-        "Initializing execution environment"
-    ]
+    if use_upload:
+        # Use new upload-based submission
+        steps = [
+            "Validating workflow configuration",
+            "Creating tarball (if directory)",
+            "Uploading target to backend",
+            "Starting workflow execution",
+            "Initializing execution environment"
+        ]
 
-    with step_progress(steps, f"Executing {workflow}") as progress:
-        progress.next_step()  # Validating
-        time.sleep(PROGRESS_STEP_DELAYS["validating"])
+        with step_progress(steps, f"Executing {workflow}") as progress:
+            progress.next_step()  # Validating
+            time.sleep(PROGRESS_STEP_DELAYS["validating"])
 
-        progress.next_step()  # Connecting
-        time.sleep(PROGRESS_STEP_DELAYS["connecting"])
+            progress.next_step()  # Creating tarball
+            time.sleep(PROGRESS_STEP_DELAYS["connecting"])
 
-        progress.next_step()  # Uploading
-        response = client.submit_workflow(workflow, submission)
-        time.sleep(PROGRESS_STEP_DELAYS["uploading"])
+            progress.next_step()  # Uploading
+            # Use the new upload method
+            response = client.submit_workflow_with_upload(
+                workflow_name=workflow,
+                target_path=target_path,
+                parameters=parameters,
+                volume_mode=volume_mode,
+                timeout=timeout
+            )
+            time.sleep(PROGRESS_STEP_DELAYS["uploading"])
 
-        progress.next_step()  # Creating deployment
-        time.sleep(PROGRESS_STEP_DELAYS["creating"])
+            progress.next_step()  # Starting
+            time.sleep(PROGRESS_STEP_DELAYS["creating"])
 
-        progress.next_step()  # Initializing
-        time.sleep(PROGRESS_STEP_DELAYS["initializing"])
+            progress.next_step()  # Initializing
+            time.sleep(PROGRESS_STEP_DELAYS["initializing"])
 
-        progress.complete(f"Workflow started successfully!")
+            progress.complete(f"Workflow started successfully!")
+    else:
+        # Fall back to path-based submission (for backward compatibility)
+        steps = [
+            "Validating workflow configuration",
+            "Connecting to FuzzForge API",
+            "Submitting workflow parameters",
+            "Creating workflow deployment",
+            "Initializing execution environment"
+        ]
+
+        with step_progress(steps, f"Executing {workflow}") as progress:
+            progress.next_step()  # Validating
+            time.sleep(PROGRESS_STEP_DELAYS["validating"])
+
+            progress.next_step()  # Connecting
+            time.sleep(PROGRESS_STEP_DELAYS["connecting"])
+
+            progress.next_step()  # Submitting
+            submission = WorkflowSubmission(
+                target_path=target_path,
+                volume_mode=volume_mode,
+                parameters=parameters,
+                timeout=timeout
+            )
+            response = client.submit_workflow(workflow, submission)
+            time.sleep(PROGRESS_STEP_DELAYS["uploading"])
+
+            progress.next_step()  # Creating deployment
+            time.sleep(PROGRESS_STEP_DELAYS["creating"])
+
+            progress.next_step()  # Initializing
+            time.sleep(PROGRESS_STEP_DELAYS["initializing"])
+
+            progress.complete(f"Workflow started successfully!")
 
     return response
 

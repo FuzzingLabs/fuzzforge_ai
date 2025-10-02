@@ -25,30 +25,31 @@ Here’s how a workflow moves through the FuzzForge system:
 ```mermaid
 graph TB
     User[User/CLI/API] --> API[FuzzForge API]
-    API --> Prefect[Prefect Orchestrator]
-    Prefect --> Worker[Prefect Worker]
-    Worker --> Container[Docker Container]
-    Container --> Tools[Security Tools]
+    API --> MinIO[MinIO Storage]
+    API --> Temporal[Temporal Orchestrator]
+    Temporal --> Worker[Vertical Worker]
+    Worker --> MinIO
+    Worker --> Tools[Security Tools]
     Tools --> Results[SARIF Results]
-    Results --> Storage[Persistent Storage]
+    Results --> MinIO
 ```
 
 **Key roles:**
-- **User/CLI/API:** Submits and manages workflows.
-- **FuzzForge API:** Validates, orchestrates, and tracks workflows.
-- **Prefect Orchestrator:** Schedules and manages workflow execution.
-- **Prefect Worker:** Runs the workflow in a Docker container.
+- **User/CLI/API:** Submits workflows and uploads files.
+- **FuzzForge API:** Validates, uploads targets, and tracks workflows.
+- **Temporal Orchestrator:** Schedules and manages workflow execution.
+- **Vertical Worker:** Long-lived worker with pre-installed security tools.
+- **MinIO Storage:** Stores uploaded targets and results.
 - **Security Tools:** Perform the actual analysis.
-- **Persistent Storage:** Stores results and artifacts.
 
 ---
 
 ## Workflow Lifecycle: From Idea to Results
 
-1. **Design:** Choose tools, define integration logic, set up parameters, and build the Docker image.
-2. **Deployment:** Build and push the image, register the workflow, and configure defaults.
-3. **Execution:** User submits a workflow; parameters and target are validated; the workflow is scheduled and executed in a container; tools run as designed.
-4. **Completion:** Results are collected, normalized, and stored; status is updated; temporary resources are cleaned up; results are made available via API/CLI.
+1. **Design:** Choose tools, define integration logic, set up parameters, and specify the vertical worker.
+2. **Deployment:** Create workflow code, add metadata with `vertical` field, mount as volume in worker.
+3. **Execution:** User submits a workflow with file upload; file is stored in MinIO; workflow is routed to vertical worker; worker downloads target and executes; tools run as designed.
+4. **Completion:** Results are collected, normalized, and stored in MinIO; status is updated; MinIO lifecycle policies clean up old files; results are made available via API/CLI.
 
 ---
 
@@ -85,25 +86,25 @@ FuzzForge supports several workflow types, each optimized for a specific securit
 
 ## Data Flow and Storage
 
-- **Input:** Target code and parameters are validated and mounted as read-only volumes.
-- **Processing:** Tools are initialized and run (often in parallel); outputs are collected and normalized.
-- **Output:** Results are stored in persistent volumes and indexed for fast retrieval; metadata is saved in the database; intermediate results may be cached for performance.
+- **Input:** Target files uploaded via HTTP to MinIO; parameters validated and passed to Temporal.
+- **Processing:** Worker downloads target from MinIO to local cache; tools are initialized and run (often in parallel); outputs are collected and normalized.
+- **Output:** Results are stored in MinIO and indexed for fast retrieval; metadata is saved in PostgreSQL; targets cached locally for repeated workflows; lifecycle policies clean up after 7 days.
 
 ---
 
 ## Error Handling and Recovery
 
-- **Tool-Level:** Timeouts, resource exhaustion, and crashes are handled gracefully; failed tools don’t stop the workflow.
-- **Workflow-Level:** Container failures, volume issues, and network problems are detected and reported.
-- **Recovery:** Automatic retries for transient errors; partial results are returned when possible; workflows degrade gracefully if some tools are unavailable.
+- **Tool-Level:** Timeouts, resource exhaustion, and crashes are handled gracefully; failed tools don't stop the workflow.
+- **Workflow-Level:** Worker failures, storage issues, and network problems are detected and reported by Temporal.
+- **Recovery:** Automatic retries for transient errors via Temporal; partial results are returned when possible; workflows degrade gracefully if some tools are unavailable; MinIO ensures targets remain accessible.
 
 ---
 
 ## Performance and Optimization
 
-- **Container Efficiency:** Docker images are layered and cached for fast startup; containers may be reused when safe.
+- **Worker Efficiency:** Long-lived workers eliminate container startup overhead; pre-installed toolchains reduce setup time.
 - **Parallel Processing:** Independent tools run concurrently to maximize CPU usage and minimize wait times.
-- **Caching:** Images, dependencies, and intermediate results are cached to avoid unnecessary recomputation.
+- **Caching:** MinIO targets are cached locally; repeated workflows reuse cached targets; worker cache uses LRU eviction.
 
 ---
 

@@ -193,7 +193,7 @@ def workflow_parameters(
         parameters = {}
         properties = workflow.parameters.get("properties", {})
         required_params = set(workflow.parameters.get("required", []))
-        defaults = param_response.defaults
+        defaults = param_response.default_parameters
 
         if interactive:
             console.print("🔧 Enter parameter values (press Enter for default):\n")

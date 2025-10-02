@@ -9,18 +9,18 @@ This guide will walk you through the process of creating a custom security analy
 Before you start, make sure you have:
 
 - A working FuzzForge development environment (see [Contributing](/reference/contributing.md))
-- Familiarity with Python (async/await), Docker, and Prefect 3
+- Familiarity with Python (async/await), Docker, and Temporal
 - At least one custom or built-in module to use in your workflow
 
 ---
 
 ## Step 1: Understand Workflow Architecture
 
-A FuzzForge workflow is a Prefect 3 flow that:
+A FuzzForge workflow is a Temporal workflow that:
 
-- Runs in an isolated Docker container
+- Runs inside a long-lived vertical worker container (pre-built with toolchains)
 - Orchestrates one or more analysis modules (scanner, analyzer, reporter, etc.)
-- Handles secure volume mounting for code and results
+- Downloads targets from MinIO (S3-compatible storage) automatically
 - Produces standardized SARIF output
 - Supports configurable parameters and resource limits
 
@@ -28,9 +28,9 @@ A FuzzForge workflow is a Prefect 3 flow that:
 
 ```
 backend/toolbox/workflows/{workflow_name}/
-├── workflow.py          # Main workflow definition (Prefect flow)
-├── Dockerfile           # Container image definition
-├── metadata.yaml        # Workflow metadata and configuration
+├── workflow.py          # Main workflow definition (Temporal workflow)
+├── activities.py        # Workflow activities (optional)
+├── metadata.yaml        # Workflow metadata and configuration (must include vertical field)
 └── requirements.txt     # Additional Python dependencies (optional)
 ```
 
@@ -48,6 +48,7 @@ version: "1.0.0"
 description: "Analyzes project dependencies for security vulnerabilities"
 author: "FuzzingLabs Security Team"
 category: "comprehensive"
+vertical: "web"  # REQUIRED: Which vertical worker to use (rust, android, web, etc.)
 tags:
   - "dependency-scanning"
   - "vulnerability-analysis"
@@ -63,10 +64,6 @@ requirements:
 parameters:
   type: object
   properties:
-    target_path:
-      type: string
-      default: "/workspace"
-      description: "Path to analyze"
     scan_dev_dependencies:
       type: boolean
       description: "Include development dependencies"
@@ -85,36 +82,35 @@ output_schema:
       description: "Scan execution summary"
 ```
 
+**Important:** The `vertical` field determines which worker runs your workflow. Ensure the worker has the required tools installed.
+
 ---
 
 ## Step 3: Add Live Statistics to Your Workflow 🚦
 
-Want real-time progress and stats for your workflow? FuzzForge supports live statistics reporting using Prefect and structured logging. This lets users (and the platform) monitor workflow progress, see live updates, and stream stats via API or WebSocket.
+Want real-time progress and stats for your workflow? FuzzForge supports live statistics reporting using Temporal workflow logging. This lets users (and the platform) monitor workflow progress, see live updates, and stream stats via API or WebSocket.
 
 ### 1. Import Required Dependencies
 
 ```python
-from prefect import task, get_run_context
+from temporalio import workflow, activity
 import logging
 
 logger = logging.getLogger(__name__)
 ```
 
-### 2. Create a Statistics Callback Function
+### 2. Create a Statistics Callback in Activity
 
-Add a callback that logs structured stats updates:
+Add a callback that logs structured stats updates in your activity:
 
 ```python
-@task(name="my_workflow_task")
-async def my_workflow_task(workspace: Path, config: Dict[str, Any]) -> Dict[str, Any]:
-    # Get run context for statistics reporting
-    try:
-        context = get_run_context()
-        run_id = str(context.flow_run.id)
-        logger.info(f"Running task for flow run: {run_id}")
-    except Exception:
-        run_id = None
-        logger.warning("Could not get run context for statistics")
+@activity.defn
+async def my_workflow_activity(target_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    # Get activity info for run tracking
+    info = activity.info()
+    run_id = info.workflow_id
+
+    logger.info(f"Running activity for workflow: {run_id}")
 
     # Define callback function for live statistics
     async def stats_callback(stats_data: Dict[str, Any]):
@@ -124,7 +120,7 @@ async def my_workflow_task(workspace: Path, config: Dict[str, Any]) -> Dict[str,
             logger.info("LIVE_STATS", extra={
                 "stats_type": "live_stats",           # Type of statistics
                 "workflow_type": "my_workflow",       # Your workflow name
-                "run_id": stats_data.get("run_id"),
+                "run_id": run_id,
 
                 # Add your custom statistics fields here:
                 "progress": stats_data.get("progress", 0),
@@ -138,7 +134,7 @@ async def my_workflow_task(workspace: Path, config: Dict[str, Any]) -> Dict[str,
 
     # Pass callback to your module/processor
     processor = MyWorkflowModule()
-    result = await processor.execute(config, workspace, stats_callback=stats_callback)
+    result = await processor.execute(config, target_path, stats_callback=stats_callback)
     return result.dict()
 ```
 
@@ -224,15 +220,16 @@ Live statistics automatically appear in:
 #### Example: Adding Stats to a Security Scanner
 
 ```python
-async def security_scan_task(workspace: Path, config: Dict[str, Any]):
-    context = get_run_context()
-    run_id = str(context.flow_run.id)
+@activity.defn
+async def security_scan_activity(target_path: str, config: Dict[str, Any]):
+    info = activity.info()
+    run_id = info.workflow_id
 
     async def stats_callback(stats_data):
         logger.info("LIVE_STATS", extra={
             "stats_type": "scan_progress",
             "workflow_type": "security_scan",
-            "run_id": stats_data.get("run_id"),
+            "run_id": run_id,
             "files_scanned": stats_data.get("files_scanned", 0),
             "vulnerabilities_found": stats_data.get("vulnerabilities_found", 0),
             "scan_percentage": stats_data.get("scan_percentage", 0.0),
@@ -241,7 +238,7 @@ async def security_scan_task(workspace: Path, config: Dict[str, Any]):
         })
 
     scanner = SecurityScannerModule()
-    return await scanner.execute(config, workspace, stats_callback=stats_callback)
+    return await scanner.execute(config, target_path, stats_callback=stats_callback)
 ```
 
 With these steps, your workflow will provide rich, real-time feedback to users and the FuzzForge platform—making automation more transparent and interactive!
@@ -250,94 +247,166 @@ With these steps, your workflow will provide rich, real-time feedback to users a
 
 ## Step 4: Implement the Workflow Logic
 
-Create a `workflow.py` file. This is where you define your Prefect flow and tasks.
+Create a `workflow.py` file. This is where you define your Temporal workflow and activities.
 
 Example (simplified):
 
 ```python
 from pathlib import Path
 from typing import Dict, Any
-from prefect import flow, task
+from temporalio import workflow, activity
+from datetime import timedelta
 from src.toolbox.modules.dependency_scanner import DependencyScanner
 from src.toolbox.modules.vulnerability_analyzer import VulnerabilityAnalyzer
 from src.toolbox.modules.reporter import SARIFReporter
 
-@task
-async def scan_dependencies(workspace: Path, config: Dict[str, Any]) -> Dict[str, Any]:
+@activity.defn
+async def scan_dependencies(target_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
     scanner = DependencyScanner()
-    return (await scanner.execute(config, workspace)).dict()
+    return (await scanner.execute(config, target_path)).dict()
 
-@task
-async def analyze_vulnerabilities(dependencies: Dict[str, Any], workspace: Path, config: Dict[str, Any]) -> Dict[str, Any]:
+@activity.defn
+async def analyze_vulnerabilities(dependencies: Dict[str, Any], target_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
     analyzer = VulnerabilityAnalyzer()
     analyzer_config = {**config, 'dependencies': dependencies.get('findings', [])}
-    return (await analyzer.execute(analyzer_config, workspace)).dict()
+    return (await analyzer.execute(analyzer_config, target_path)).dict()
 
-@task
-async def generate_report(dep_results: Dict[str, Any], vuln_results: Dict[str, Any], config: Dict[str, Any], workspace: Path) -> Dict[str, Any]:
+@activity.defn
+async def generate_report(dep_results: Dict[str, Any], vuln_results: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     reporter = SARIFReporter()
     all_findings = dep_results.get("findings", []) + vuln_results.get("findings", [])
     reporter_config = {**config, "findings": all_findings}
-    return (await reporter.execute(reporter_config, workspace)).dict().get("sarif", {})
+    return (await reporter.execute(reporter_config, None)).dict().get("sarif", {})
 
-@flow(name="dependency_analysis")
-async def main_flow(
-    target_path: str = "/workspace",
-    scan_dev_dependencies: bool = True,
-    vulnerability_threshold: str = "medium"
-) -> Dict[str, Any]:
-    workspace = Path(target_path)
-    scanner_config = {"scan_dev_dependencies": scan_dev_dependencies}
-    analyzer_config = {"vulnerability_threshold": vulnerability_threshold}
-    reporter_config = {}
+@workflow.defn
+class DependencyAnalysisWorkflow:
+    @workflow.run
+    async def run(
+        self,
+        target_id: str,  # Target file ID from MinIO (downloaded by worker automatically)
+        scan_dev_dependencies: bool = True,
+        vulnerability_threshold: str = "medium"
+    ) -> Dict[str, Any]:
+        workflow.logger.info(f"Starting dependency analysis for target: {target_id}")
 
-    dep_results = await scan_dependencies(workspace, scanner_config)
-    vuln_results = await analyze_vulnerabilities(dep_results, workspace, analyzer_config)
-    sarif_report = await generate_report(dep_results, vuln_results, reporter_config, workspace)
-    return sarif_report
+        # Worker downloads target from MinIO to /cache/{target_id}
+        target_path = f"/cache/{target_id}"
+
+        scanner_config = {"scan_dev_dependencies": scan_dev_dependencies}
+        analyzer_config = {"vulnerability_threshold": vulnerability_threshold}
+
+        # Execute activities with retries and timeouts
+        dep_results = await workflow.execute_activity(
+            scan_dependencies,
+            args=[target_path, scanner_config],
+            start_to_close_timeout=timedelta(minutes=10),
+            retry_policy=workflow.RetryPolicy(maximum_attempts=3)
+        )
+
+        vuln_results = await workflow.execute_activity(
+            analyze_vulnerabilities,
+            args=[dep_results, target_path, analyzer_config],
+            start_to_close_timeout=timedelta(minutes=10),
+            retry_policy=workflow.RetryPolicy(maximum_attempts=3)
+        )
+
+        sarif_report = await workflow.execute_activity(
+            generate_report,
+            args=[dep_results, vuln_results, {}],
+            start_to_close_timeout=timedelta(minutes=5),
+            retry_policy=workflow.RetryPolicy(maximum_attempts=3)
+        )
+
+        workflow.logger.info("Dependency analysis completed")
+        return sarif_report
 ```
+
+**Key differences from Prefect:**
+- Use `@workflow.defn` class instead of `@flow` function
+- Use `@activity.defn` instead of `@task`
+- Activities receive `target_id` (MinIO UUID), worker downloads automatically to `/cache/{target_id}`
+- Use `workflow.execute_activity()` with explicit timeouts and retry policies
+- Use `workflow.logger` for logging (appears in Temporal UI)
 
 ---
 
-## Step 5: Create the Dockerfile
+## Step 5: No Dockerfile Needed! 🎉
 
-Your workflow runs in a container. Create a `Dockerfile`:
+**Good news:** You don't need to create a Dockerfile for your workflow. Workflows run inside pre-built **vertical worker containers** that already have toolchains installed.
 
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
-COPY ../../../pyproject.toml ./
-COPY ../../../uv.lock ./
-RUN pip install uv && uv sync --no-dev
-COPY requirements.txt ./
-RUN uv pip install -r requirements.txt
-COPY ../../../ .
-RUN mkdir -p /workspace
-CMD ["uv", "run", "python", "-m", "src.toolbox.workflows.dependency_analysis.workflow"]
-```
+**How it works:**
+1. Your workflow code lives in `backend/toolbox/workflows/{workflow_name}/`
+2. This directory is **mounted as a volume** in the worker container at `/app/toolbox/workflows/`
+3. Worker discovers and registers your workflow automatically on startup
+4. When submitted, the workflow runs inside the long-lived worker container
+
+**Benefits:**
+- Zero container build time per workflow
+- Instant code changes (just restart worker)
+- All toolchains pre-installed (AFL++, cargo-fuzz, apktool, etc.)
+- Consistent environment across all workflows of the same vertical
 
 ---
 
-## Step 6: Register and Test Your Workflow
+## Step 6: Test Your Workflow
 
-- Add your workflow to the registry (e.g., `backend/toolbox/workflows/registry.py`)
-- Write a test script or use the CLI to submit a workflow run
-- Check that SARIF results are produced and stored as expected
+### Using the CLI
 
-Example test:
+```bash
+# Start FuzzForge with Temporal
+docker-compose -f docker-compose.temporal.yaml up -d
+
+# Wait for services to initialize
+sleep 10
+
+# Submit workflow with file upload
+cd test_projects/vulnerable_app/
+fuzzforge workflow run dependency_analysis .
+
+# CLI automatically:
+# - Creates tarball of current directory
+# - Uploads to MinIO via backend
+# - Submits workflow with target_id
+# - Worker downloads from MinIO and executes
+```
+
+### Using Python SDK
 
 ```python
-import asyncio
-from backend.src.toolbox.workflows.dependency_analysis.workflow import main_flow
+from fuzzforge_sdk import FuzzForgeClient
+from pathlib import Path
 
-async def test_workflow():
-    result = await main_flow(target_path="/tmp/test-project", scan_dev_dependencies=True)
-    print(result)
+client = FuzzForgeClient(base_url="http://localhost:8000")
 
-if __name__ == "__main__":
-    asyncio.run(test_workflow())
+# Submit with automatic upload
+response = client.submit_workflow_with_upload(
+    workflow_name="dependency_analysis",
+    target_path=Path("/path/to/project"),
+    parameters={
+        "scan_dev_dependencies": True,
+        "vulnerability_threshold": "medium"
+    }
+)
+
+print(f"Workflow started: {response.run_id}")
+
+# Wait for completion
+final_status = client.wait_for_completion(response.run_id)
+
+# Get findings
+findings = client.get_run_findings(response.run_id)
+print(findings.sarif)
+
+client.close()
 ```
+
+### Check Temporal UI
+
+Open http://localhost:8233 to see:
+- Workflow execution timeline
+- Activity results
+- Logs and errors
+- Retry history
 
 ---
 

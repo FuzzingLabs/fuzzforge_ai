@@ -430,8 +430,9 @@ def validate_run_id(run_id: str) -> str:
     if not run_id or len(run_id) < 8:
         raise ValidationError("run_id", run_id, "at least 8 characters")
 
-    if not run_id.replace('-', '').isalnum():
-        raise ValidationError("run_id", run_id, "alphanumeric characters and hyphens only")
+    # Allow alphanumeric characters, hyphens, and underscores
+    if not run_id.replace('-', '').replace('_', '').isalnum():
+        raise ValidationError("run_id", run_id, "alphanumeric characters, hyphens, and underscores only")
 
     return run_id
 

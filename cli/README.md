@@ -153,10 +153,10 @@ fuzzforge workflows parameters security_assessment --no-interactive
 ### Workflow Execution
 
 #### `fuzzforge workflow <workflow> <target-path>`
-Execute a security testing workflow.
+Execute a security testing workflow with **automatic file upload**.
 
 ```bash
-# Basic execution
+# Basic execution - CLI automatically detects local files and uploads them
 fuzzforge workflow security_assessment /path/to/code
 
 # With parameters
@@ -171,6 +171,49 @@ fuzzforge workflow security_assessment /path/to/code \
 # Wait for completion
 fuzzforge workflow security_assessment /path/to/code --wait
 ```
+
+**Automatic File Upload Behavior:**
+
+The CLI intelligently handles target files based on whether they exist locally:
+
+1. **Local file/directory exists** → **Automatic upload to MinIO**:
+   - CLI creates a compressed tarball (`.tar.gz`) for directories
+   - Uploads via HTTP to backend API
+   - Backend stores in MinIO with unique `target_id`
+   - Worker downloads from MinIO when ready to analyze
+   - ✅ **Works from any machine** (no shared filesystem needed)
+
+2. **Path doesn't exist locally** → **Path-based submission** (legacy):
+   - Path is sent to backend as-is
+   - Backend expects target to be accessible on its filesystem
+   - ⚠️ Only works when CLI and backend share filesystem
+
+**Example workflow:**
+```bash
+$ ff workflow security_assessment ./my-project
+
+🔧 Getting workflow information for: security_assessment
+📦 Detected local directory: ./my-project (21 files)
+🗜️  Creating compressed tarball...
+📤 Uploading to backend (0.01 MB)...
+✅ Upload complete! Target ID: 548193a1-f73f-4ec1-8068-19ec2660b8e4
+
+🎯 Executing workflow:
+   Workflow: security_assessment
+   Target: my-project.tar.gz (uploaded)
+   Volume Mode: ro
+   Status: 🔄 RUNNING
+
+✅ Workflow started successfully!
+   Execution ID: security_assessment-52781925
+```
+
+**Upload Details:**
+- **Max file size**: 10 GB (configurable on backend)
+- **Compression**: Automatic for directories (reduces upload time)
+- **Storage**: Files stored in MinIO (S3-compatible)
+- **Lifecycle**: Automatic cleanup after 7 days
+- **Caching**: Workers cache downloaded targets for faster repeated workflows
 
 **Options:**
 - `--param, -p` - Parameter in key=value format (can be used multiple times)

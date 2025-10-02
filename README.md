@@ -131,30 +131,37 @@ uv tool install --python python3.12 .
 
 ## ⚡ Quickstart
 
-Run your first workflow :
+Run your first workflow with **Temporal orchestration** and **automatic file upload**:
 
 ```bash
 # 1. Clone the repo
 git clone https://github.com/fuzzinglabs/fuzzforge_ai.git
 cd fuzzforge_ai
 
-# 2. Build & run with Docker
-# Set registry host for your OS (local registry is mandatory)
-# macOS/Windows (Docker Desktop):
-export REGISTRY_HOST=host.docker.internal
-# Linux (default):
-# export REGISTRY_HOST=localhost
-docker compose up -d
+# 2. Start FuzzForge with Temporal
+docker-compose -f docker-compose.temporal.yaml up -d
 ```
 
-> The first launch can take 5-10 minutes due to Docker image building - a good time for a coffee break ☕
+> The first launch can take 2-3 minutes for services to initialize ☕
 
 ```bash
-# 3. Run your first workflow
-cd test_projects/vulnerable_app/ # Go into the test directory
-fuzzforge init # Init a fuzzforge project
-ff workflow run security_assessment . # Start a workflow (you can also use ff command)
+# 3. Run your first workflow (files are automatically uploaded)
+cd test_projects/vulnerable_app/
+fuzzforge init                           # Initialize FuzzForge project
+ff workflow run security_assessment .    # Start workflow - CLI uploads files automatically!
+
+# The CLI will:
+# - Detect the local directory
+# - Create a compressed tarball
+# - Upload to backend (via MinIO)
+# - Start the workflow on vertical worker
 ```
+
+**What's running:**
+- **Temporal**: Workflow orchestration (UI at http://localhost:8233)
+- **MinIO**: File storage for targets (Console at http://localhost:9001)
+- **Vertical Workers**: Pre-built workers with security toolchains
+- **Backend API**: FuzzForge REST API (http://localhost:8000)
 
 ### Manual Workflow Setup
 

@@ -124,9 +124,10 @@ class WorkflowMetadata(BaseModel):
 
 class WorkflowParametersResponse(BaseModel):
     """Response for workflow parameters endpoint"""
+    workflow: str = Field(..., description="Workflow name")
     parameters: Dict[str, Any] = Field(..., description="Parameters schema")
-    defaults: Dict[str, Any] = Field(default_factory=dict, description="Default values")
-    required: List[str] = Field(default_factory=list, description="Required parameter names")
+    default_parameters: Dict[str, Any] = Field(default_factory=dict, description="Default parameter values")
+    required_parameters: List[str] = Field(default_factory=list, description="Required parameter names")
 
 
 class RunSubmissionResponse(BaseModel):

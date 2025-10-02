@@ -93,51 +93,57 @@ graph TB
 
 ### Orchestration Layer
 
-- **Prefect Server:** Schedules and tracks workflows, backed by PostgreSQL.
-- **Prefect Workers:** Execute workflows in Docker containers. Can be scaled horizontally.
-- **Workflow Scheduler:** Balances load, manages priorities, and enforces resource limits.
+- **Temporal Server:** Schedules and tracks workflows, backed by PostgreSQL.
+- **Vertical Workers:** Long-lived workers pre-built with domain-specific toolchains (Android, Rust, Web, etc.). Can be scaled horizontally.
+- **Task Queues:** Route workflows to appropriate vertical workers based on workflow metadata.
 
 ### Execution Layer
 
-- **Docker Engine:** Runs workflow containers, enforcing isolation and resource limits.
-- **Workflow Containers:** Custom images with security tools, mounting code and results volumes.
-- **Docker Registry:** Stores and distributes workflow images.
+- **Vertical Workers:** Long-lived processes with pre-installed security tools for specific domains.
+- **MinIO Storage:** S3-compatible storage for uploaded targets and results.
+- **Worker Cache:** Local cache for downloaded targets, with LRU eviction.
 
 ### Storage Layer
 
-- **PostgreSQL Database:** Stores workflow metadata, state, and results.
-- **Docker Volumes:** Persist workflow results and artifacts.
-- **Result Cache:** Speeds up access to recent results, with in-memory and disk persistence.
+- **PostgreSQL Database:** Stores Temporal workflow state and metadata.
+- **MinIO (S3):** Persistent storage for uploaded targets and workflow results.
+- **Worker Cache:** Local filesystem cache for downloaded targets (LRU eviction).
 
 ## How Does Data Flow Through the System?
 
 ### Submitting a Workflow
 
-1. **User submits a workflow** via CLI or API client.
-2. **API validates** the request and creates a deployment in Prefect.
-3. **Prefect schedules** the workflow and assigns it to a worker.
-4. **Worker launches a container** to run the workflow.
-5. **Results are stored** in Docker volumes and the database.
-6. **Status updates** flow back through Prefect and the API to the user.
+1. **User submits a workflow** via CLI or API client (with optional file upload).
+2. **If file provided, API uploads** to MinIO and gets a `target_id`.
+3. **API validates** the request and submits to Temporal.
+4. **Temporal routes** the workflow to the appropriate vertical worker queue.
+5. **Worker downloads target** from MinIO to local cache (if needed).
+6. **Worker executes workflow** with pre-installed tools.
+7. **Results are stored** in MinIO and metadata in PostgreSQL.
+8. **Status updates** flow back through Temporal and the API to the user.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant API
-    participant Prefect
+    participant MinIO
+    participant Temporal
     participant Worker
-    participant Container
-    participant Storage
+    participant Cache
 
-    User->>API: Submit workflow
+    User->>API: Submit workflow + file
     API->>API: Validate parameters
-    API->>Prefect: Create deployment
-    Prefect->>Worker: Schedule execution
-    Worker->>Container: Create and start
-    Container->>Container: Execute security tools
-    Container->>Storage: Store SARIF results
-    Worker->>Prefect: Update status
-    Prefect->>API: Workflow complete
+    API->>MinIO: Upload target file
+    MinIO-->>API: Return target_id
+    API->>Temporal: Submit workflow(target_id)
+    Temporal->>Worker: Route to vertical queue
+    Worker->>MinIO: Download target
+    MinIO-->>Worker: Stream file
+    Worker->>Cache: Store in local cache
+    Worker->>Worker: Execute security tools
+    Worker->>MinIO: Upload SARIF results
+    Worker->>Temporal: Update status
+    Temporal->>API: Workflow complete
     API->>User: Return results
 ```
 
@@ -149,25 +155,27 @@ sequenceDiagram
 
 ## How Do Services Communicate?
 
-- **Internally:** FastAPI talks to Prefect via REST; Prefect coordinates with workers over HTTP; workers manage containers via the Docker Engine API. All core services use pooled connections to PostgreSQL.
-- **Externally:** Users interact via CLI or API clients (HTTP REST). The MCP server can automate workflows via its own protocol.
+- **Internally:** FastAPI talks to Temporal via gRPC; Temporal coordinates with workers over gRPC; workers access MinIO via S3 API. All core services use pooled connections to PostgreSQL.
+- **Externally:** Users interact via CLI or API clients (HTTP REST).
 
 ## How Is Security Enforced?
 
-- **Container Isolation:** Each workflow runs in its own Docker network, as a non-root user, with strict resource limits and only necessary volumes mounted.
-- **Volume Security:** Source code is mounted read-only; results are written to dedicated, temporary volumes.
-- **API Security:** All endpoints require API keys, validate inputs, enforce rate limits, and log requests for auditing.
+- **Worker Isolation:** Each workflow runs in isolated vertical workers with pre-defined toolchains.
+- **Storage Security:** Uploaded files stored in MinIO with lifecycle policies; read-only access by default.
+- **API Security:** All endpoints validate inputs, enforce rate limits, and log requests for auditing.
+- **No Host Access:** Workers access targets via MinIO, not host filesystem.
 
 ## How Does FuzzForge Scale?
 
-- **Horizontally:** Add more Prefect workers to handle more workflows in parallel. Scale the database with read replicas and connection pooling.
-- **Vertically:** Adjust CPU and memory limits for containers and services as needed.
+- **Horizontally:** Add more vertical workers to handle more workflows in parallel. Scale specific worker types based on demand.
+- **Vertically:** Adjust CPU and memory limits for workers and adjust concurrent activity limits.
 
 Example Docker Compose scaling:
 ```yaml
 services:
-  prefect-worker:
+  worker-rust:
     deploy:
+      replicas: 3  # Scale rust workers
       resources:
         limits:
           memory: 4G
@@ -179,21 +187,22 @@ services:
 
 ## How Is It Deployed?
 
-- **Development:** All services run via Docker Compose—backend, Prefect, workers, database, and registry.
-- **Production:** Add load balancers, database clustering, and multiple worker instances for high availability. Health checks, metrics, and centralized logging support monitoring and troubleshooting.
+- **Development:** All services run via Docker Compose—backend, Temporal, vertical workers, database, and MinIO.
+- **Production:** Add load balancers, Temporal clustering, database replication, and multiple worker instances for high availability. Health checks, metrics, and centralized logging support monitoring and troubleshooting.
 
 ## How Is Configuration Managed?
 
-- **Environment Variables:** Control core settings like database URLs, registry location, and Prefect API endpoints.
-- **Service Discovery:** Docker Compose’s internal DNS lets services find each other by name, with consistent port mapping and health check endpoints.
+- **Environment Variables:** Control core settings like database URLs, MinIO endpoints, and Temporal addresses.
+- **Service Discovery:** Docker Compose's internal DNS lets services find each other by name, with consistent port mapping and health check endpoints.
 
 Example configuration:
 ```bash
 COMPOSE_PROJECT_NAME=fuzzforge
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fuzzforge
-PREFECT_API_URL=http://prefect-server:4200/api
-DOCKER_REGISTRY=localhost:5001
-DOCKER_INSECURE_REGISTRY=true
+TEMPORAL_ADDRESS=temporal:7233
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY=fuzzforge
+S3_SECRET_KEY=fuzzforge123
 ```
 
 ## How Are Failures Handled?
@@ -203,9 +212,9 @@ DOCKER_INSECURE_REGISTRY=true
 
 ## Implementation Details
 
-- **Tech Stack:** FastAPI (Python async), Prefect 3.x, Docker, Docker Compose, PostgreSQL (asyncpg), and Docker networking.
-- **Performance:** Workflows start in 2–5 seconds; results are retrieved quickly thanks to caching and database indexing.
-- **Extensibility:** Add new workflows by deploying new Docker images; extend the API with new endpoints; configure storage backends as needed.
+- **Tech Stack:** FastAPI (Python async), Temporal, MinIO, Docker, Docker Compose, PostgreSQL (asyncpg), and boto3 (S3 client).
+- **Performance:** Workflows start immediately (workers are long-lived); results are retrieved quickly thanks to MinIO caching and database indexing.
+- **Extensibility:** Add new workflows by mounting code; add new vertical workers with specialized toolchains; extend the API with new endpoints.
 
 ---
 
