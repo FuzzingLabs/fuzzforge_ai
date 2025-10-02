@@ -179,8 +179,20 @@ class TemporalManager:
         if not workflow_id:
             workflow_id = f"{workflow_name}-{str(uuid4())[:8]}"
 
-        # Prepare workflow input - target_id as first arg, rest as kwargs
+        # Prepare workflow input arguments
         workflow_params = workflow_params or {}
+
+        # Build args list: [target_id, ...workflow_params values]
+        # The workflow parameters are passed as individual positional args
+        workflow_args = [target_id]
+
+        # Add parameters in order based on workflow signature
+        # For security_assessment: scanner_config, analyzer_config, reporter_config
+        # For atheris_fuzzing: target_file, max_iterations, timeout_seconds
+        # Parameters come from metadata.yaml's default_parameters merged with user params
+        if workflow_params:
+            # Add all parameter values as positional args
+            workflow_args.extend(workflow_params.values())
 
         # Determine task queue from workflow vertical
         vertical = workflow_info.metadata.get("vertical", "default")
@@ -192,11 +204,10 @@ class TemporalManager:
         )
 
         try:
-            # Start workflow execution with target_id + keyword arguments
+            # Start workflow execution with positional arguments
             handle = await self.client.start_workflow(
                 workflow=workflow_info.workflow_type,  # Workflow class name
-                arg=target_id,  # First positional argument
-                kwargs=workflow_params,  # Rest as keyword arguments
+                args=workflow_args,  # Positional arguments
                 id=workflow_id,
                 task_queue=task_queue,
                 retry_policy=RetryPolicy(
