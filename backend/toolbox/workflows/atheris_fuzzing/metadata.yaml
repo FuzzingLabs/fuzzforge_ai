@@ -1,0 +1,76 @@
+name: atheris_fuzzing
+version: "1.0.0"
+vertical: python
+description: "Fuzz Python code using Atheris with real-time monitoring. Automatically discovers and fuzzes TestOneInput() functions in user code."
+author: "FuzzForge Team"
+category: "fuzzing"
+tags:
+  - "fuzzing"
+  - "atheris"
+  - "python"
+  - "coverage"
+  - "security"
+
+supported_volume_modes:
+  - "ro"
+
+default_volume_mode: "ro"
+default_target_path: "/workspace"
+
+requirements:
+  tools:
+    - "atheris_fuzzer"
+  resources:
+    memory: "512Mi"
+    cpu: "500m"
+    timeout: 3600
+
+has_docker: false
+
+default_parameters:
+  target_file: null
+  max_iterations: 100000
+  timeout_seconds: 300
+
+parameters:
+  type: object
+  properties:
+    target_file:
+      type: string
+      description: "Python file with TestOneInput() function (auto-discovered if not specified)"
+    max_iterations:
+      type: integer
+      default: 100000
+      description: "Maximum fuzzing iterations"
+    timeout_seconds:
+      type: integer
+      default: 300
+      description: "Fuzzing timeout in seconds (5 minutes)"
+
+output_schema:
+  type: object
+  properties:
+    findings:
+      type: array
+      description: "Crashes and vulnerabilities found during fuzzing"
+      items:
+        type: object
+        properties:
+          title:
+            type: string
+          severity:
+            type: string
+          category:
+            type: string
+          metadata:
+            type: object
+    summary:
+      type: object
+      description: "Fuzzing execution summary"
+      properties:
+        total_executions:
+          type: integer
+        crashes_found:
+          type: integer
+        execution_time:
+          type: number

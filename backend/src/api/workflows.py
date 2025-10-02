@@ -15,8 +15,10 @@ API endpoints for workflow management with enhanced error handling
 
 import logging
 import traceback
+import tempfile
+import shutil
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pathlib import Path
 
 from src.models.findings import (
@@ -28,6 +30,16 @@ from src.models.findings import (
 from src.temporal.discovery import WorkflowDiscovery
 
 logger = logging.getLogger(__name__)
+
+# Configuration for file uploads
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024 * 1024  # 10 GB
+ALLOWED_CONTENT_TYPES = [
+    "application/gzip",
+    "application/x-gzip",
+    "application/x-tar",
+    "application/x-compressed-tar",
+    "application/octet-stream",  # Generic binary
+]
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -209,8 +221,11 @@ async def submit_workflow(
             metadata={"workflow": workflow_name}
         )
 
-        # Prepare workflow parameters
-        workflow_params = submission.parameters or {}
+        # Merge default parameters with user parameters
+        metadata = workflow_info.metadata or {}
+        defaults = metadata.get("default_parameters", {})
+        user_params = submission.parameters or {}
+        workflow_params = {**defaults, **user_params}
 
         # Start workflow execution
         handle = await temporal_mgr.run_workflow(
@@ -319,6 +334,180 @@ async def submit_workflow(
             status_code=500,
             detail=error_response
         )
+
+
+@router.post("/{workflow_name}/upload-and-submit", response_model=RunSubmissionResponse)
+async def upload_and_submit_workflow(
+    workflow_name: str,
+    file: UploadFile = File(..., description="Target file or tarball to analyze"),
+    parameters: Optional[str] = Form(None, description="JSON-encoded workflow parameters"),
+    volume_mode: str = Form("ro", description="Volume mount mode (ro/rw)"),
+    timeout: Optional[int] = Form(None, description="Timeout in seconds"),
+    temporal_mgr=Depends(get_temporal_manager)
+) -> RunSubmissionResponse:
+    """
+    Upload a target file/tarball and submit workflow for execution.
+
+    This endpoint accepts multipart/form-data uploads and is the recommended
+    way to submit workflows from remote CLI clients.
+
+    Args:
+        workflow_name: Name of the workflow to execute
+        file: Target file or tarball (compressed directory)
+        parameters: JSON string of workflow parameters (optional)
+        volume_mode: Volume mount mode - "ro" (read-only) or "rw" (read-write)
+        timeout: Execution timeout in seconds (optional)
+
+    Returns:
+        Run submission response with run_id and initial status
+
+    Raises:
+        HTTPException: 404 if workflow not found, 400 for invalid parameters,
+                      413 if file too large
+    """
+    if workflow_name not in temporal_mgr.workflows:
+        available_workflows = list(temporal_mgr.workflows.keys())
+        error_response = create_structured_error_response(
+            error_type="WorkflowNotFound",
+            message=f"Workflow '{workflow_name}' not found",
+            workflow_name=workflow_name,
+            suggestions=[
+                f"Available workflows: {', '.join(available_workflows)}",
+                "Use GET /workflows/ to see all available workflows"
+            ]
+        )
+        raise HTTPException(status_code=404, detail=error_response)
+
+    temp_file_path = None
+
+    try:
+        # Validate file size
+        file_size = 0
+        chunk_size = 1024 * 1024  # 1MB chunks
+
+        # Create temporary file
+        temp_fd, temp_file_path = tempfile.mkstemp(suffix=".tar.gz")
+
+        logger.info(f"Receiving file upload for workflow '{workflow_name}': {file.filename}")
+
+        # Stream file to disk
+        with open(temp_fd, 'wb') as temp_file:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+
+                file_size += len(chunk)
+
+                # Check size limit
+                if file_size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=create_structured_error_response(
+                            error_type="FileTooLarge",
+                            message=f"File size exceeds maximum allowed size of {MAX_UPLOAD_SIZE / (1024**3):.1f} GB",
+                            workflow_name=workflow_name,
+                            suggestions=[
+                                "Reduce the size of your target directory",
+                                "Exclude unnecessary files (build artifacts, dependencies, etc.)",
+                                "Consider splitting into smaller analysis targets"
+                            ]
+                        )
+                    )
+
+                temp_file.write(chunk)
+
+        logger.info(f"Received file: {file_size / (1024**2):.2f} MB")
+
+        # Parse parameters
+        workflow_params = {}
+        if parameters:
+            try:
+                import json
+                workflow_params = json.loads(parameters)
+                if not isinstance(workflow_params, dict):
+                    raise ValueError("Parameters must be a JSON object")
+            except (json.JSONDecodeError, ValueError) as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=create_structured_error_response(
+                        error_type="InvalidParameters",
+                        message=f"Invalid parameters JSON: {e}",
+                        workflow_name=workflow_name,
+                        suggestions=["Ensure parameters is valid JSON object"]
+                    )
+                )
+
+        # Upload to MinIO
+        target_id = await temporal_mgr.upload_target(
+            file_path=Path(temp_file_path),
+            user_id="api-user",
+            metadata={
+                "workflow": workflow_name,
+                "original_filename": file.filename,
+                "upload_method": "multipart"
+            }
+        )
+
+        logger.info(f"Uploaded to MinIO with target_id: {target_id}")
+
+        # Merge default parameters with user parameters
+        workflow_info = temporal_mgr.workflows.get(workflow_name)
+        metadata = workflow_info.metadata or {}
+        defaults = metadata.get("default_parameters", {})
+        workflow_params = {**defaults, **workflow_params}
+
+        # Start workflow execution
+        handle = await temporal_mgr.run_workflow(
+            workflow_name=workflow_name,
+            target_id=target_id,
+            workflow_params=workflow_params
+        )
+
+        run_id = handle.id
+
+        # Initialize fuzzing tracking if needed
+        workflow_info = temporal_mgr.workflows.get(workflow_name, {})
+        workflow_tags = workflow_info.metadata.get("tags", []) if hasattr(workflow_info, 'metadata') else []
+        if "fuzzing" in workflow_tags or "fuzz" in workflow_name.lower():
+            from src.api.fuzzing import initialize_fuzzing_tracking
+            initialize_fuzzing_tracking(run_id, workflow_name)
+
+        return RunSubmissionResponse(
+            run_id=run_id,
+            status="RUNNING",
+            workflow=workflow_name,
+            message=f"Workflow '{workflow_name}' submitted successfully with uploaded target"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to upload and submit workflow '{workflow_name}': {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+
+        error_response = create_structured_error_response(
+            error_type="WorkflowSubmissionError",
+            message=f"Failed to process upload and submit workflow: {str(e)}",
+            workflow_name=workflow_name,
+            suggestions=[
+                "Check if the uploaded file is a valid tarball",
+                "Verify MinIO storage is accessible",
+                "Check backend logs for detailed error information",
+                "Ensure Temporal workers are running"
+            ]
+        )
+
+        raise HTTPException(status_code=500, detail=error_response)
+
+    finally:
+        # Cleanup temporary file
+        if temp_file_path and Path(temp_file_path).exists():
+            try:
+                Path(temp_file_path).unlink()
+                logger.debug(f"Cleaned up temp file: {temp_file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup temp file {temp_file_path}: {e}")
 
 
 @router.get("/{workflow_name}/parameters")

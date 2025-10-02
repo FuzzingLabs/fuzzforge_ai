@@ -179,15 +179,8 @@ class TemporalManager:
         if not workflow_id:
             workflow_id = f"{workflow_name}-{str(uuid4())[:8]}"
 
-        # Prepare workflow input arguments in order
-        # For security_assessment: (target_id, scanner_config, analyzer_config, reporter_config)
+        # Prepare workflow input - target_id as first arg, rest as kwargs
         workflow_params = workflow_params or {}
-        workflow_args = [
-            target_id,
-            workflow_params.get("scanner_config"),
-            workflow_params.get("analyzer_config"),
-            workflow_params.get("reporter_config")
-        ]
 
         # Determine task queue from workflow vertical
         vertical = workflow_info.metadata.get("vertical", "default")
@@ -199,10 +192,11 @@ class TemporalManager:
         )
 
         try:
-            # Start workflow execution with positional arguments
+            # Start workflow execution with target_id + keyword arguments
             handle = await self.client.start_workflow(
                 workflow=workflow_info.workflow_type,  # Workflow class name
-                args=workflow_args,  # Positional arguments
+                arg=target_id,  # First positional argument
+                kwargs=workflow_params,  # Rest as keyword arguments
                 id=workflow_id,
                 task_queue=task_queue,
                 retry_policy=RetryPolicy(
