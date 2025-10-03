@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <RelativeLayout
+        android:id="@+id/toolbar"
+        android:padding="15dp"
+        android:layout_width="match_parent"
+        android:layout_height="68dp">
+        <TextView
+            android:textSize="22sp"
+            android:textColor="#000"
+            android:id="@+id/current_language"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Misconfigured Firebase Database"
+            android:layout_centerHorizontal="true"
+            android:fontFamily="@font/kanit_regular"/>
+    </RelativeLayout>
+    <LinearLayout
+        android:orientation="horizontal"
+        android:id="@+id/linear_layout2"
+        android:padding="16dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/toolbar">
+        <TextView
+            android:textSize="16sp"
+            android:textColor="@color/green"
+            android:id="@+id/hint"
+            android:paddingLeft="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="30dp"
+            android:text="Hint: "
+            android:fontFamily="@font/kanit_regular"
+            android:textAlignment="center"/>
+        <TextView
+            android:textSize="16sp"
+            android:textColor="#bfbfbf"
+            android:id="@+id/hintText"
+            android:paddingLeft="16dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="30dp"
+            android:text="A misconfigured Firebase instance can be identified by making the following network call: https://firebaseProjectName.firebaseio.com/.json"
+            android:fontFamily="@font/kanit_regular"/>
+    </LinearLayout>
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="70dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginRight="16dp"
+        android:layout_marginBottom="70dp"
+        android:weightSum="1"
+        android:layout_alignParentBottom="true">
+        <EditText
+            android:textSize="17dp"
+            android:id="@+id/flag"
+            android:layout_width="0dp"
+            android:layout_height="65dp"
+            android:layout_marginLeft="25sp"
+            android:layout_marginRight="20dp"
+            android:hint=" Enter Flag"
+            android:layout_weight="0.5"
+            android:fontFamily="@font/kanit_regular"/>
+        <Button
+            android:textColor="@android:color/black"
+            android:id="@+id/button"
+            android:background="@drawable/rectangle_yellow"
+            android:layout_width="0dp"
+            android:layout_height="65dp"
+            android:text="Submit"
+            android:layout_weight="0.5"
+            android:textAllCaps="false"
+            android:fontFamily="@font/kanit_regular"/>
+    </LinearLayout>
+    <ImageView
+        android:id="@+id/imageView2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="254dp"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"
+        app:srcCompat="@drawable/firebase"/>
+</RelativeLayout>

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:versionCode="1"
+    android:versionName="1.0"
+    android:compileSdkVersion="30"
+    android:compileSdkVersionCodename="11"
+    package="app.beetlebug"
+    platformBuildVersionCode="30"
+    platformBuildVersionName="11">
+    <uses-sdk
+        android:minSdkVersion="23"
+        android:targetSdkVersion="30"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <application
+        android:theme="@style/Theme.Beetlebug"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:debuggable="true"
+        android:allowBackup="true"
+        android:supportsRtl="true"
+        android:extractNativeLibs="false"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:appComponentFactory="androidx.core.app.CoreComponentFactory">
+        <activity
+            android:name="app.beetlebug.ctf.DisplayXSS"
+            android:exported="false"/>
+        <activity
+            android:name="app.beetlebug.ctf.BinaryPatchActivity"
+            android:exported="false"/>
+        <activity
+            android:name="app.beetlebug.ctf.b33tleAdministrator"
+            android:exported="true"/>
+        <activity
+            android:name="app.beetlebug.ctf.VulnerableWebView"
+            android:exported="true"/>
+        <activity
+            android:name="app.beetlebug.ctf.VulnerableClipboardActivity"
+            android:exported="false"/>
+        <activity
+            android:name="app.beetlebug.ctf.InsecureContentProvider"
+            android:exported="false"/>
+        <provider
+            android:name="app.beetlebug.handlers.VulnerableContentProvider"
+            android:enabled="true"
+            android:exported="true"
+            android:authorities="app.beetlebug.provider"/>
+        <activity
+            android:name="app.beetlebug.ctf.WebViewXSSActivity"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+            </intent-filter>
+        </activity>
+        <activity android:name="app.beetlebug.ctf.DeeplinkAccountActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="beetlebug.com"
+                    android:pathPrefix="/account"/>
+            </intent-filter>
+        </activity>
+        <activity android:name="app.beetlebug.ctf.FirebaseDatabaseActivity"/>
+        <activity android:name="app.beetlebug.ctf.SQLInjectionActivity"/>
+        <activity android:name="app.beetlebug.user.PlayerStats"/>
+        <activity
+            android:name="app.beetlebug.ctf.WebViewURLActivity"
+            android:exported="true"/>
+        <activity android:name="app.beetlebug.ctf.EmbeddedSecretSourceCode"/>
+        <activity android:name="app.beetlebug.ctf.EmbeddedSecretStrings"/>
+        <activity android:name="app.beetlebug.ctf.InsecureLoggingActivity"/>
+        <activity android:name="app.beetlebug.user.UserSignUp"/>
+        <activity android:name="app.beetlebug.Walkthrough">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="app.beetlebug.ctf.InsecureStorageExternal"
+            android:exported="false"/>
+        <activity
+            android:name="app.beetlebug.FlagCaptured"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+        <activity
+            android:name="app.beetlebug.ctf.BiometricActivityDeeplink"
+            android:exported="true"/>
+        <activity android:name="app.beetlebug.ctf.VulnerableServiceActivity"/>
+        <activity android:name="app.beetlebug.ctf.InsecureStorageSQLite"/>
+        <activity android:name="app.beetlebug.ctf.InsecureStorageSharedPref"/>
+        <activity
+            android:name="app.beetlebug.ctf.VulnerableActivityIntent"
+            android:exported="false"/>
+        <activity
+            android:name="app.beetlebug.FlagsOverview"
+            android:screenOrientation="portrait"/>
+        <activity
+            android:name="app.beetlebug.MainActivity"
+            android:exported="false"/>
+        <service
+            android:name="app.beetlebug.handlers.VulnerableService"
+            android:protectionLevel="dangerous"
+            android:enabled="true"
+            android:exported="true"/>
+        <service
+            android:name="com.google.firebase.components.ComponentDiscoveryService"
+            android:exported="false"
+            android:directBootAware="true">
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.database.DatabaseRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar"/>
+        </service>
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:exported="false"
+            android:authorities="app.beetlebug.firebaseinitprovider"
+            android:initOrder="100"
+            android:directBootAware="true"/>
+        <activity
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+            android:exported="false"/>
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version"/>
+    </application>
+</manifest>

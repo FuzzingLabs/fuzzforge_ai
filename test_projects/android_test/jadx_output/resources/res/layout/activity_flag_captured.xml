@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main_layout"
+    android:background="@color/default_light_grey_bg"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <LinearLayout
+        android:gravity="center"
+        android:id="@+id/linear_layout1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:textSize="24sp"
+            android:textColor="#000"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Flag Captured!"
+            android:fontFamily="@font/kanit_regular"/>
+        <TextView
+            android:textSize="23sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" +"
+            android:fontFamily="@font/kanit_regular"/>
+        <TextView
+            android:textSize="23sp"
+            android:id="@+id/ctfPoint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" 0"
+            android:fontFamily="@font/kanit_regular"/>
+        <TextView
+            android:textSize="23sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="XP"
+            android:fontFamily="@font/kanit_regular"/>
+    </LinearLayout>
+    <app.beetlebug.utils.CustomProgressBar
+        android:id="@+id/user_progress_bar"
+        android:layout_width="230dp"
+        android:layout_height="230dp"
+        android:layout_marginTop="70dp"
+        android:layout_below="@+id/linear_layout1"
+        android:layout_centerHorizontal="true"
+        app:background_progress_thickness="60"
+        app:foreground_progress_thickness="60"
+        style="@style/week_progress_bars"/>
+    <TextView
+        android:textSize="22dp"
+        android:id="@+id/beetlePoints"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Total Beetle Points: "
+        android:layout_below="@+id/user_progress_bar"
+        android:fontFamily="@font/kanit_regular"
+        android:layout_marginStart="60dp"
+        android:layout_alignParentStart="true"/>
+    <TextView
+        android:textSize="22dp"
+        android:id="@+id/totalCTFPoints"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="+10XP"
+        android:layout_toRightOf="@+id/beetlePoints"
+        android:layout_below="@+id/user_progress_bar"
+        android:fontFamily="@font/kanit_light"/>
+    <Button
+        android:textSize="17sp"
+        android:textColor="@android:color/black"
+        android:id="@+id/continue_button"
+        android:background="@drawable/rectangle_yellow"
+        android:layout_width="320dp"
+        android:layout_height="65dp"
+        android:layout_marginTop="40dp"
+        android:layout_marginBottom="20dp"
+        android:text="Continue"
+        android:layout_below="@+id/beetlePoints"
+        android:layout_centerInParent="true"
+        android:onClick="continueCTF"
+        android:textAllCaps="false"
+        android:fontFamily="@font/kanit_regular"
+        app:cornerRadius="14dp"/>
+</RelativeLayout>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <RelativeLayout
+        android:id="@+id/toolbar"
+        android:padding="15dp"
+        android:layout_width="match_parent"
+        android:layout_height="68dp">
+        <TextView
+            android:textSize="27sp"
+            android:textColor="#000"
+            android:id="@+id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="By-pass URL Check"
+            android:layout_centerHorizontal="true"
+            android:fontFamily="@font/kanit_regular"/>
+    </RelativeLayout>
+    <LinearLayout
+        android:orientation="vertical"
+        android:id="@+id/linear_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="20dp"
+        android:layout_below="@+id/toolbar">
+        <TextView
+            android:textSize="24sp"
+            android:layout_gravity="center"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Register for Beetlebug CTF"
+            android:fontFamily="@font/kanit_regular"/>
+    </LinearLayout>
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
+        android:layout_below="@+id/linear_layout"
+        android:layout_centerHorizontal="true"/>
+</RelativeLayout>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:id="@+id/id"
+        android:padding="3dp"
+        android:visibility="visible"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="40dp"
+        android:text="1"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentTop="true"/>
+    <TextView
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:id="@+id/name"
+        android:padding="3dp"
+        android:layout_width="377dp"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="35dp"
+        android:text="Username"
+        android:maxLines="1"
+        android:layout_toRightOf="@+id/id"
+        android:layout_alignParentLeft="true"
+        android:fontFamily="@font/kanit_regular"/>
+</RelativeLayout>

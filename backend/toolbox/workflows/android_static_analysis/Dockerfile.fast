@@ -1,0 +1,16 @@
+# Use existing image with MobSF already installed
+FROM localhost:5001/fuzzforge/android_static_analysis:latest
+
+# Install unzip and Jadx
+RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/* \
+    && wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip \
+    && unzip -o jadx-1.5.0.zip -d /opt/jadx \
+    && rm jadx-1.5.0.zip \
+    && chmod +x /opt/jadx/bin/jadx \
+    && ln -sf /opt/jadx/bin/jadx /usr/local/bin/jadx
+
+# Copy updated toolbox files
+COPY . /app/toolbox
+
+# Copy Android custom rules
+COPY ./modules/android/custom_rules /app/custom_opengrep_rules

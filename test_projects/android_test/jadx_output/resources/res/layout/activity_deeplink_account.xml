@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <RelativeLayout
+        android:id="@+id/toolbar"
+        android:padding="15dp"
+        android:layout_width="match_parent"
+        android:layout_height="68dp">
+        <TextView
+            android:textSize="27sp"
+            android:textColor="#000"
+            android:id="@+id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Flag Found"
+            android:layout_centerHorizontal="true"
+            android:fontFamily="@font/kanit_regular"/>
+    </RelativeLayout>
+    <ImageView
+        android:id="@+id/flag"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:layout_marginTop="80dp"
+        android:src="@drawable/flag5"
+        android:layout_centerInParent="true"/>
+    <TextView
+        android:textSize="22sp"
+        android:id="@+id/textViewFlag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:text="@string/_0x43j123"
+        android:layout_below="@+id/flag"
+        android:layout_centerHorizontal="true"
+        android:fontFamily="@font/kanit_regular"/>
+    <TextView
+        android:textSize="22sp"
+        android:id="@+id/textViewUrl"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:text="URL"
+        android:layout_below="@+id/textViewFlag"
+        android:layout_centerHorizontal="true"
+        android:fontFamily="@font/kanit_regular"/>
+    <Button
+        android:textSize="16sp"
+        android:textColor="@color/black"
+        android:id="@+id/copy"
+        android:background="@drawable/rectangle_yellow"
+        android:layout_width="250dp"
+        android:layout_height="55dp"
+        android:layout_marginTop="22dp"
+        android:src="@drawable/copy"
+        android:text="Copy to clipboard"
+        android:layout_below="@+id/textViewUrl"
+        android:layout_centerHorizontal="true"
+        android:onClick="copy"
+        android:textAllCaps="false"
+        android:fontFamily="@font/kanit_regular"/>
+</RelativeLayout>

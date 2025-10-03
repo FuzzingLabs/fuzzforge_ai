@@ -1,0 +1,135 @@
+name: android_static_analysis
+version: "1.0.0"
+description: "Perform static analysis on Android applications using OpenGrep and MobSF."
+author: "FuzzForge Team"
+category: "specialized"
+tags:
+  - "android"
+  - "static-analysis"
+  - "security"
+  - "opengrep"
+  - "semgrep"
+  - "mobsf"
+
+supported_volume_modes:
+  - "ro"
+  - "rw"
+
+default_volume_mode: "ro"
+default_target_path: "/workspace/android_test"
+
+requirements:
+  tools:
+    - "opengrep"
+    - "mobsf"
+    - "sarif_reporter"
+  resources:
+    memory: "2Gi"
+    cpu: "2000m"
+    timeout: 3600
+  environment:
+    python: "3.11"
+
+has_docker: true
+
+default_parameters:
+  target_path: "/workspace/android_test"
+  volume_mode: "ro"
+  apk_path: ""
+  opengrep_config: {}
+  custom_rules_path: "/app/custom_opengrep_rules"
+  reporter_config: {}
+
+parameters:
+  type: object
+  properties:
+    target_path:
+      type: string
+      default: "/workspace/android_test"
+      description: "Path to the decompiled Android source code for OpenGrep analysis."
+    volume_mode:
+      type: string
+      enum: ["ro", "rw"]
+      default: "ro"
+      description: "Volume mount mode for the attached workspace."
+    apk_path:
+      type: string
+      default: ""
+      description: "Path to the APK file for MobSF analysis (relative to workspace parent or absolute). If empty, MobSF analysis will be skipped."
+    opengrep_config:
+      type: object
+      description: "Configuration object forwarded to the OpenGrep module."
+      properties:
+        config:
+          type: string
+          enum: ["auto", "p/security-audit", "p/owasp-top-ten", "p/cwe-top-25"]
+          description: "Preset OpenGrep ruleset to run."
+        custom_rules_path:
+          type: string
+          description: "Directory that contains custom OpenGrep rules."
+        languages:
+          type: array
+          items:
+            type: string
+          description: "Restrict analysis to specific languages."
+        include_patterns:
+          type: array
+          items:
+            type: string
+          description: "File patterns to include in the scan."
+        exclude_patterns:
+          type: array
+          items:
+            type: string
+          description: "File patterns to exclude from the scan."
+        max_target_bytes:
+          type: integer
+          description: "Maximum file size to analyze (bytes)."
+        timeout:
+          type: integer
+          description: "Analysis timeout in seconds."
+        severity:
+          type: array
+          items:
+            type: string
+            enum: ["ERROR", "WARNING", "INFO"]
+          description: "Severities to include in the results."
+        confidence:
+          type: array
+          items:
+            type: string
+            enum: ["HIGH", "MEDIUM", "LOW"]
+          description: "Confidence levels to include in the results."
+    custom_rules_path:
+      type:
+        - string
+        - "null"
+      default: "/app/custom_opengrep_rules"
+      description: "Optional in-container path pointing to custom OpenGrep rules."
+    reporter_config:
+      type: object
+      description: "Configuration overrides for the SARIF reporter."
+      properties:
+        include_code_flows:
+          type: boolean
+          description: "Include code flow information in the SARIF output."
+        logical_id:
+          type: string
+          description: "Custom identifier to attach to the generated SARIF report."
+
+output_schema:
+  type: object
+  properties:
+    sarif:
+      type: object
+      description: "SARIF-formatted findings produced by the workflow."
+    summary:
+      type: object
+      description: "Summary information about the analysis execution."
+      properties:
+        total_findings:
+          type: integer
+        severity_counts:
+          type: object
+        tool_metadata:
+          type: object

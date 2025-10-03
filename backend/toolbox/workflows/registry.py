@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Import each workflow individually to handle failures gracefully
 security_assessment_flow = None
 secret_detection_flow = None
+android_static_analysis_flow = None
 
 # Try to import each workflow individually
 try:
@@ -41,6 +42,11 @@ try:
     from .comprehensive.secret_detection_scan.workflow import main_flow as secret_detection_flow
 except ImportError as e:
     logger.warning(f"Failed to import secret_detection_scan workflow: {e}")
+
+try:
+    from .android_static_analysis.workflow import main_flow as android_static_analysis_flow
+except ImportError as e:
+    logger.warning(f"Failed to import android_static_analysis workflow: {e}")
 
 
 # Manual registry - developers add workflows here after creation
@@ -68,6 +74,17 @@ if secret_detection_flow is not None:
         "version": "1.0.0",
         "author": "FuzzForge Team",
         "tags": ["secrets", "credentials", "detection", "trufflehog", "gitleaks", "comprehensive"]
+    }
+
+if android_static_analysis_flow is not None:
+    WORKFLOW_REGISTRY["android_static_analysis"] = {
+        "flow": android_static_analysis_flow,
+        "module_path": "toolbox.workflows.android_static_analysis.workflow",
+        "function_name": "main_flow",
+        "description": "Perform static analysis on Android applications using OpenGrep",
+        "version": "1.0.0",
+        "author": "FuzzForge Team",
+        "tags": ["android", "static-analysis", "security", "opengrep", "semgrep"]
     }
 
 #
