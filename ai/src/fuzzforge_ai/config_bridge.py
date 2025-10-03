@@ -13,18 +13,23 @@
 
 try:
     from fuzzforge_cli.config import ProjectConfigManager as _ProjectConfigManager
-except ImportError as exc:  # pragma: no cover - used when CLI not available
+except ImportError:  # pragma: no cover - used when CLI not available
+    _MISSING_MSG = (
+        "ProjectConfigManager is unavailable. Install the FuzzForge CLI package "
+        "or supply a compatible configuration object."
+    )
+
+    def _raise_missing() -> None:
+        raise ImportError(_MISSING_MSG)
+
     class _ProjectConfigManager:  # type: ignore[no-redef]
         """Fallback implementation that raises a helpful error."""
 
         def __init__(self, *args, **kwargs):
-            raise ImportError(
-                "ProjectConfigManager is unavailable. Install the FuzzForge CLI "
-                "package or supply a compatible configuration object."
-            ) from exc
+            _raise_missing()
 
     def __getattr__(name):  # pragma: no cover - defensive
-        raise ImportError("ProjectConfigManager unavailable") from exc
+        _raise_missing()
 
 ProjectConfigManager = _ProjectConfigManager
 

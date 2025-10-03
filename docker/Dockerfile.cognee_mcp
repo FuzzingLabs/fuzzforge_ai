@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+# Install system deps needed by cognee + http clients
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+ && rm -rf /var/lib/apt/lists/*
+
+# Copy source (AI module + Cognee client lib)
+COPY ai /app/ai
+COPY cognee/cognee /app/cognee
+
+# Adjust local dependency path for container build
+RUN sed -i 's|cognee @ file://../cognee/cognee|cognee @ file:///app/cognee|g' /app/ai/pyproject.toml
+
+# Install dependencies
+RUN pip install --no-cache-dir /app/cognee && \
+    pip install --no-cache-dir /app/ai
+
+# Expose MCP HTTP port
+EXPOSE 18001
+
+# Default command - can be overridden by docker-compose
+CMD ["python", "-m", "fuzzforge_ai.mcp.cognee_mcp_server", "--transport", "http", "--host", "0.0.0.0", "--port", "18001"]

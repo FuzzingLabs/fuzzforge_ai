@@ -18,7 +18,14 @@ providing intelligent AI agent capabilities for security analysis.
 
 __version__ = "0.6.0"
 
-from .agent import FuzzForgeAgent
-from .config_manager import ConfigManager
+try:
+    from .agent import FuzzForgeAgent
+except ImportError:  # pragma: no cover - optional dependency graph
+    FuzzForgeAgent = None  # type: ignore
+
+try:
+    from .config_manager import ConfigManager
+except ImportError:  # pragma: no cover - optional dependency graph
+    ConfigManager = None  # type: ignore
 
 __all__ = ['FuzzForgeAgent', 'ConfigManager']

@@ -214,8 +214,16 @@ class CogneeAPIClient:
             f"Cognee ingestion failed ({response.status_code}): {response.text.strip()}"
         )
 
-    async def cognify(self, dataset_name: str) -> Dict[str, Any]:
-        payload = {"datasets": [dataset_name]}
+    async def cognify(
+        self,
+        dataset_name: str,
+        *,
+        run_in_background: bool = False,
+        custom_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"datasets": [dataset_name], "run_in_background": run_in_background}
+        if custom_prompt is not None:
+            payload["custom_prompt"] = custom_prompt
         try:
             response = await self._client.post("/api/v1/cognify", json=payload)
         except httpx.RequestError as exc:
@@ -258,6 +266,10 @@ class CogneeAPIClient:
         datasets: Optional[Iterable[str]] = None,
         search_type: str = "INSIGHTS",
         top_k: Optional[int] = None,
+        only_context: Optional[bool] = None,
+        node_name: Optional[Iterable[str]] = None,
+        system_prompt: Optional[str] = None,
+        use_combined_context: Optional[bool] = None,
     ) -> Any:
         payload: Dict[str, Any] = {
             "query": query,
@@ -267,6 +279,14 @@ class CogneeAPIClient:
             payload["datasets"] = list(datasets)
         if top_k is not None:
             payload["top_k"] = top_k
+        if only_context is not None:
+            payload["only_context"] = only_context
+        if node_name is not None:
+            payload["node_name"] = list(node_name)
+        if system_prompt is not None:
+            payload["system_prompt"] = system_prompt
+        if use_combined_context is not None:
+            payload["use_combined_context"] = use_combined_context
 
         try:
             response = await self._client.post("/api/v1/search", json=payload)
@@ -274,10 +294,47 @@ class CogneeAPIClient:
             raise CogneeAPIError(f"Cognee search request failed: {exc}") from exc
 
         if response.status_code in {200, 201}:
-            # search may already be JSON serialisable but ensure data type is python object
             return response.json()
         raise CogneeAPIError(
             f"Cognee search failed ({response.status_code}): {response.text.strip()}"
+        )
+
+    async def memify(
+        self,
+        *,
+        dataset_name: Optional[str] = None,
+        dataset_id: Optional[str] = None,
+        extraction_tasks: Optional[Iterable[str]] = None,
+        enrichment_tasks: Optional[Iterable[str]] = None,
+        data: Optional[str] = None,
+        node_name: Optional[Iterable[str]] = None,
+        run_in_background: bool = False,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "datasetName": dataset_name,
+            "datasetId": dataset_id,
+            "runInBackground": run_in_background,
+        }
+        if extraction_tasks is not None:
+            payload["extractionTasks"] = list(extraction_tasks)
+        if enrichment_tasks is not None:
+            payload["enrichmentTasks"] = list(enrichment_tasks)
+        if data is not None:
+            payload["data"] = data
+        if node_name is not None:
+            payload["nodeName"] = list(node_name)
+
+        payload = {key: value for key, value in payload.items() if value is not None}
+
+        try:
+            response = await self._client.post("/api/v1/memify", json=payload)
+        except httpx.RequestError as exc:
+            raise CogneeAPIError(f"Cognee memify request failed: {exc}") from exc
+
+        if response.status_code in {200, 202}:
+            return response.json()
+        raise CogneeAPIError(
+            f"Cognee memify failed ({response.status_code}): {response.text.strip()}"
         )
 
     async def status(self) -> Dict[str, Any]:
