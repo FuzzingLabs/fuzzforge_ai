@@ -209,7 +209,13 @@ class HybridMemoryManager:
         """Search past conversations using ADK memory"""
         return await self.memory_service.search_memory(query)
     
-    async def search_knowledge_graph(self, query: str, search_type: str = "GRAPH_COMPLETION"):
+    async def search_knowledge_graph(
+        self,
+        query: str,
+        search_type: str = "GRAPH_COMPLETION",
+        dataset: Optional[str] = None,
+        **kwargs: Any,
+    ):
         """Search Cognee knowledge graph (for RAG/codebase in future)"""
         if not self.cognee_tools:
             return None
@@ -218,20 +224,22 @@ class HybridMemoryManager:
             # Use Cognee's graph search
             return await self.cognee_tools.search(
                 query=query,
-                search_type=search_type
+                search_type=search_type,
+                dataset=dataset,
+                **kwargs,
             )
         except Exception as e:
             logger.debug(f"Cognee search failed: {e}")
             return None
     
-    async def store_in_graph(self, content: str):
+    async def store_in_graph(self, content: str, dataset: Optional[str] = None):
         """Store in Cognee knowledge graph (for codebase analysis later)"""
         if not self.cognee_tools:
             return None
             
         try:
             # Use cognify to create graph structures
-            return await self.cognee_tools.cognify(content)
+            return await self.cognee_tools.cognify(dataset=dataset)
         except Exception as e:
             logger.debug(f"Cognee store failed: {e}")
             return None

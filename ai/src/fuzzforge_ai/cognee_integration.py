@@ -21,6 +21,10 @@ import json
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 
+from .config_bridge import ProjectConfigManager
+from .mcp.cognee_mcp_client import CogneeMCPTools
+from .utils.project_env import load_project_env
+
 
 class CogneeProjectIntegration:
     """
@@ -363,7 +367,7 @@ async def search_project_codebase(query: str, project_dir: Optional[str] = None,
     Returns:
         Formatted search results as string
     """
-    cognee_integration = CogneeProjectIntegration(project_dir)
+    cognee_integration = create_cognee_integration(project_dir)
     result = await cognee_integration.search_knowledge_graph(query, search_type, dataset)
     
     if "error" in result:
@@ -402,7 +406,118 @@ async def search_project_codebase(query: str, project_dir: Optional[str] = None,
     else:
         output += f"{str(results)[:500]}..."
     
-    return output
+        return output
+
+
+class CogneeServiceIntegration:
+    """Cognee integration backed by the MCP service."""
+
+    def __init__(self, project_dir: Optional[str] = None):
+        self.project_dir = Path(project_dir) if project_dir else Path.cwd()
+        self.project_manager: Optional[ProjectConfigManager] = None
+        self.project_context: Dict[str, Any] = {}
+        self.cognee_tools: Optional[CogneeMCPTools] = None
+        self.dataset: Optional[str] = None
+        self._initialized = False
+
+    async def initialize(self) -> bool:
+        if self._initialized:
+            return True
+
+        try:
+            load_project_env(self.project_dir)
+            self.project_manager = ProjectConfigManager(self.project_dir)
+            self.project_manager.setup_cognee_environment()
+            self.project_context = self.project_manager.get_project_context()
+        except Exception:
+            return False
+
+        dataset = os.getenv("COGNEE_DEFAULT_DATASET") or os.getenv("COGNEE_DATASET_NAME")
+        if not dataset:
+            project_name = self.project_context.get("project_name") or "fuzzforge"
+            dataset = f"{project_name}_codebase"
+        self.dataset = dataset
+
+        mcp_url = os.getenv("COGNEE_MCP_URL") or "http://localhost:18001/mcp"
+        service_url = os.getenv("COGNEE_SERVICE_URL") or os.getenv("COGNEE_API_URL")
+        user_email = os.getenv("COGNEE_SERVICE_USER_EMAIL") or os.getenv("DEFAULT_USER_EMAIL")
+        user_password = os.getenv("COGNEE_SERVICE_USER_PASSWORD") or os.getenv("DEFAULT_USER_PASSWORD")
+
+        self.cognee_tools = CogneeMCPTools(
+            base_url=mcp_url,
+            default_dataset=self.dataset,
+            default_email=user_email,
+            default_password=user_password,
+            default_service_url=service_url,
+        )
+
+        os.environ.setdefault("COGNEE_MCP_URL", mcp_url)
+        self._initialized = True
+        return True
+
+    async def search_knowledge_graph(
+        self,
+        query: str,
+        search_type: str = "GRAPH_COMPLETION",
+        dataset: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        if not self._initialized and not await self.initialize():
+            return {"error": "Cognee service not initialised"}
+        if not self.cognee_tools:
+            return {"error": "Cognee tools unavailable"}
+
+        target_dataset = dataset or self.dataset
+        result = await self.cognee_tools.search(
+            query=query,
+            search_type=search_type,
+            dataset=target_dataset,
+            **kwargs,
+        )
+        return {
+            "tenant": result.get("tenant") if isinstance(result, dict) else None,
+            "dataset": target_dataset,
+            "search_type": search_type,
+            "results": result,
+        }
+
+    async def list_knowledge_data(self) -> Dict[str, Any]:
+        if not self._initialized and not await self.initialize():
+            return {"error": "Cognee service not initialised"}
+        if not self.cognee_tools:
+            return {"error": "Cognee tools unavailable"}
+
+        datasets = await self.cognee_tools.list_datasets()
+        return {
+            "project": self.project_context.get("project_name"),
+            "available_data": datasets,
+        }
+
+    async def ingest_text_to_dataset(self, text: str, dataset: str = None) -> Dict[str, Any]:
+        if not self._initialized and not await self.initialize():
+            return {"error": "Cognee service not initialised"}
+
+        target_dataset = dataset or self.dataset
+        try:
+            from .cognee_service import CogneeService
+
+            service = CogneeService(self.project_manager)
+            await service.initialize()
+            success = await service.ingest_text(text, target_dataset)
+            if success:
+                await self.cognee_tools.cognify(dataset=target_dataset, run_in_background=True)
+                return {"status": "queued", "dataset": target_dataset}
+            return {"error": "Cognee ingestion failed"}
+        except Exception as exc:
+            return {"error": f"Service ingestion failed: {exc}"}
+
+
+def create_cognee_integration(project_dir: Optional[str] = None):
+    storage_mode = (os.getenv("COGNEE_STORAGE_MODE") or "").lower()
+    service_url = os.getenv("COGNEE_SERVICE_URL") or os.getenv("COGNEE_API_URL")
+    if storage_mode == "service" or service_url:
+        return CogneeServiceIntegration(project_dir)
+    return CogneeProjectIntegration(project_dir)
 
 
 async def list_project_knowledge(project_dir: Optional[str] = None) -> str:
@@ -415,7 +530,7 @@ async def list_project_knowledge(project_dir: Optional[str] = None) -> str:
     Returns:
         Formatted list of available data
     """
-    cognee_integration = CogneeProjectIntegration(project_dir)
+    cognee_integration = create_cognee_integration(project_dir)
     result = await cognee_integration.list_knowledge_data()
     
     if "error" in result:

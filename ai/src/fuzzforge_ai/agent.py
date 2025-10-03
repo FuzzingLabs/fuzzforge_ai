@@ -16,12 +16,15 @@ The core agent that combines all components
 
 import os
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from google.adk import Agent
 from google.adk.models.lite_llm import LiteLlm
 from .agent_card import get_fuzzforge_agent_card
 from .agent_executor import FuzzForgeExecutor
 from .memory_service import FuzzForgeMemoryService, HybridMemoryManager
+from .mcp.cognee_mcp_client import CogneeMCPTools
+from .config_bridge import ProjectConfigManager
+from .utils.project_env import load_project_env
 
 # Load environment variables from the AI module's .env file
 try:
@@ -45,29 +48,62 @@ class FuzzForgeAgent:
         port: int = 10100,
     ):
         """Initialize FuzzForge agent with configuration"""
+        load_project_env()
+
         self.model = model or os.getenv('LITELLM_MODEL', 'gpt-4o-mini')
-        self.cognee_url = cognee_url or os.getenv('COGNEE_MCP_URL')
+        self.cognee_url = cognee_url or os.getenv('COGNEE_MCP_URL') or 'http://localhost:18001/mcp'
+        os.environ.setdefault('COGNEE_MCP_URL', self.cognee_url)
         self.port = port
+
+        project_context: Dict[str, Any] = {}
+        self.project_config: Optional[ProjectConfigManager] = None
+        try:
+            self.project_config = ProjectConfigManager()
+            self.project_config.setup_cognee_environment()
+            project_context = self.project_config.get_project_context()
+        except Exception:
+            self.project_config = None
 
         # Initialize ADK Memory Service for conversational memory
         memory_type = os.getenv('MEMORY_SERVICE', 'inmemory')
         self.memory_service = FuzzForgeMemoryService(memory_type=memory_type)
-        
+
+        default_dataset = (
+            os.getenv('COGNEE_DEFAULT_DATASET')
+            or os.getenv('COGNEE_DATASET_NAME')
+        )
+        if not default_dataset and project_context.get('project_name'):
+            default_dataset = f"{project_context['project_name']}_codebase"
+
+        cognee_email = os.getenv('COGNEE_SERVICE_USER_EMAIL') or os.getenv('DEFAULT_USER_EMAIL')
+        cognee_password = os.getenv('COGNEE_SERVICE_USER_PASSWORD') or os.getenv('DEFAULT_USER_PASSWORD')
+        service_url = os.getenv('COGNEE_SERVICE_URL') or os.getenv('COGNEE_API_URL')
+
+        self.cognee_tools: Optional[CogneeMCPTools] = None
+        if self.cognee_url:
+            self.cognee_tools = CogneeMCPTools(
+                base_url=self.cognee_url,
+                default_dataset=default_dataset,
+                default_email=cognee_email,
+                default_password=cognee_password,
+                default_service_url=service_url,
+            )
+
         # Create the executor (the brain) with memory and session services
         self.executor = FuzzForgeExecutor(
             model=self.model,
             cognee_url=self.cognee_url,
             debug=os.getenv('FUZZFORGE_DEBUG', '0') == '1',
             memory_service=self.memory_service,
+            memory_manager=self.memory_manager,
             session_persistence=os.getenv('SESSION_PERSISTENCE', 'inmemory'),
             fuzzforge_mcp_url=os.getenv('FUZZFORGE_MCP_URL'),
         )
         
         # Create Hybrid Memory Manager (ADK + Cognee direct integration)
-        # MCP tools removed - using direct Cognee integration only
         self.memory_manager = HybridMemoryManager(
             memory_service=self.memory_service,
-            cognee_tools=None  # No MCP tools, direct integration used instead
+            cognee_tools=self.cognee_tools,
         )
         
         # Get the agent card (the identity)

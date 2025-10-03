@@ -80,6 +80,7 @@ class FuzzForgeExecutor:
         cognee_url: str = None,
         debug: bool = False,
         memory_service=None,
+        memory_manager=None,
         session_persistence: str = None,
         fuzzforge_mcp_url: str = None,
     ):
@@ -88,6 +89,7 @@ class FuzzForgeExecutor:
         self.cognee_url = cognee_url or os.getenv('COGNEE_MCP_URL')
         self.debug = debug
         self.memory_service = memory_service  # ADK memory service
+        self.memory_manager = memory_manager
         self.session_persistence = session_persistence or os.getenv('SESSION_PERSISTENCE', 'inmemory')
         self.fuzzforge_mcp_url = fuzzforge_mcp_url or os.getenv('FUZZFORGE_MCP_URL')
         self._background_tasks: set[asyncio.Task] = set()
@@ -308,13 +310,13 @@ class FuzzForgeExecutor:
             return self._knowledge_integration
 
         try:
-            from .cognee_integration import CogneeProjectIntegration
+            from .cognee_integration import create_cognee_integration
 
-            integration = CogneeProjectIntegration()
+            integration = create_cognee_integration()
             initialised = await integration.initialize()
             if not initialised:
                 if self.debug:
-                    print("[DEBUG] CogneeProjectIntegration initialization failed")
+                    print("[DEBUG] Cognee integration initialization failed")
                 return None
 
             self._knowledge_integration = integration
@@ -345,6 +347,11 @@ class FuzzForgeExecutor:
         async def cognee_search(query: str) -> str:
             """Search Cognee knowledge graph memory"""
             try:
+                if self.memory_manager and getattr(self.memory_manager, "cognee_tools", None):
+                    results = await self.memory_manager.search_knowledge_graph(query)
+                    if isinstance(results, (dict, list)):
+                        return json.dumps(results, indent=2)
+                    return str(results)
                 if self.cognee_service:
                     results = await self.cognee_service.search_memory(query)
                     return f"Cognee search results: {results}"
@@ -554,8 +561,8 @@ class FuzzForgeExecutor:
         async def cognify_information(text: str) -> str:
             """Transform information into knowledge graph format"""
             try:
-                from .cognee_integration import CogneeProjectIntegration
-                integration = CogneeProjectIntegration()
+                from .cognee_integration import create_cognee_integration
+                integration = create_cognee_integration()
                 result = await integration.cognify_text(text)
                 
                 if "error" in result:

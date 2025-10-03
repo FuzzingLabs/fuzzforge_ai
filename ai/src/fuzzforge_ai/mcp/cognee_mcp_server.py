@@ -11,24 +11,16 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
 from mcp.server import FastMCP
 import mcp.types as types
 
 from fuzzforge_ai.cognee_api_client import CogneeAPIClient, CogneeAPIError
+from fuzzforge_ai.utils.project_env import load_project_env
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=os.getenv("MCP_LOG_LEVEL", "INFO"))
 
 mcp = FastMCP("FuzzForge-Cognee")
-
-
-def _load_project_env() -> None:
-    """Load environment variables from `.fuzzforge/.env` if present."""
-
-    env_path = Path.cwd() / ".fuzzforge" / ".env"
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
 
 
 class TenantCredentials:
@@ -64,7 +56,7 @@ class CogneeMCPContext:
     TENANT_CONFIG_DEFAULT = Path(".fuzzforge") / "cognee.tenants.json"
 
     def __init__(self) -> None:
-        _load_project_env()
+        load_project_env()
         self.verify_ssl = os.getenv("COGNEE_VERIFY_SSL", "true").lower() != "false"
         self.tenants = self._load_tenants()
         if not self.tenants:
