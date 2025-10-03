@@ -13,10 +13,9 @@ Models for workflow findings and submissions
 #
 # Additional attribution and requirements are provided in the NOTICE file.
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, Literal, List
 from datetime import datetime
-from pathlib import Path
 
 
 class WorkflowFindings(BaseModel):
@@ -77,10 +76,6 @@ class WorkflowMetadata(BaseModel):
     supported_volume_modes: List[Literal["ro", "rw"]] = Field(
         default=["ro", "rw"],
         description="Supported volume mount modes"
-    )
-    has_custom_docker: bool = Field(
-        default=False,
-        description="Whether workflow has custom Dockerfile"
     )
 
 

@@ -16,7 +16,7 @@ Security Analyzer Module - Analyzes code for security vulnerabilities
 import logging
 import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 try:
     from toolbox.modules.base import BaseModule, ModuleMetadata, ModuleResult, ModuleFinding

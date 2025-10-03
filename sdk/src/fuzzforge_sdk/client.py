@@ -278,7 +278,7 @@ class FuzzForgeClient:
                     # Add directory recursively
                     for item in source_path.rglob("*"):
                         if item.is_file():
-                            arcname = item.relative_to(source_path.parent)
+                            arcname = item.relative_to(source_path)
                             tar.add(item, arcname=arcname)
                             bytes_written += item.stat().st_size
                             if progress_callback:

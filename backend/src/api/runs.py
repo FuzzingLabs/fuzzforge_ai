@@ -14,7 +14,6 @@ API endpoints for workflow run management and findings retrieval
 # Additional attribution and requirements are provided in the NOTICE file.
 
 import logging
-from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
 
 from src.models.findings import WorkflowFindings, WorkflowStatus
@@ -118,9 +117,9 @@ async def get_run_findings(
         # Get the workflow result
         result = await temporal_mgr.get_workflow_result(run_id)
 
-        # Extract SARIF from result
+        # Extract SARIF from result (handle None for backwards compatibility)
         if isinstance(result, dict):
-            sarif = result.get("sarif", {})
+            sarif = result.get("sarif") or {}
         else:
             sarif = {}
 

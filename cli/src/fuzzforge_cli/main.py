@@ -357,43 +357,6 @@ app.add_typer(ingest.app, name="ingest", help="🧠 Ingest knowledge into AI")
 
 # Help and utility commands
 @app.command()
-def examples():
-    """
-    📚 Show usage examples
-    """
-    examples_text = """
-[bold cyan]FuzzForge CLI Examples[/bold cyan]
-
-[bold]Getting Started:[/bold]
-  ff init                           # Initialize a project
-  ff workflows                      # List available workflows
-  ff workflow info afl-fuzzing      # Get workflow details
-
-[bold]Execute Workflows:[/bold]
-  ff workflow afl-fuzzing ./target  # Run fuzzing on target
-  ff workflow afl-fuzzing . --live  # Run with live monitoring
-  ff workflow scan-c ./src timeout=300 threads=4  # With parameters
-
-[bold]Monitor Execution:[/bold]
-  ff status                         # Check latest execution
-  ff workflow status                # Same as above
-  ff monitor                        # Live monitoring dashboard
-  ff workflow history               # Show past executions
-
-[bold]Review Findings:[/bold]
-  ff findings                       # List all findings
-  ff finding                        # Show latest finding
-  ff finding export --format sarif  # Export findings
-
-[bold]AI Features:[/bold]
-  ff ai chat                        # Interactive AI chat
-  ff ai suggest ./src               # Get workflow suggestions
-  ff finding analyze                # AI analysis of latest finding
-"""
-    console.print(examples_text)
-
-
-@app.command()
 def version():
     """
     📦 Show version information
@@ -418,7 +381,6 @@ def main_callback(
     • ff init                        - Initialize a new project
     • ff workflows                   - See available workflows
     • ff workflow <name> <target>    - Execute a workflow
-    • ff examples                    - Show usage examples
     """
     if version:
         from . import __version__
@@ -468,7 +430,7 @@ def main():
                     'workflows', 'workflow',
                     'findings', 'finding',
                     'monitor', 'ai', 'ingest',
-                    'examples', 'version'
+                    'version'
                 ]
 
                 if main_cmd not in valid_commands:

@@ -1,7 +1,7 @@
 """
-Atheris Fuzzing Workflow - Temporal Version
+Cargo Fuzzing Workflow - Temporal Version
 
-Fuzzes user-provided Python code using Atheris with real-time monitoring.
+Fuzzes user-provided Rust code using cargo-fuzz with real-time monitoring.
 """
 
 from datetime import timedelta
@@ -18,34 +18,37 @@ logger = logging.getLogger(__name__)
 
 
 @workflow.defn
-class AtherisFuzzingWorkflow:
+class CargoFuzzingWorkflow:
     """
-    Fuzz Python code using Atheris.
+    Fuzz Rust code using cargo-fuzz (libFuzzer).
 
     User workflow:
-    1. User runs: ff workflow run atheris_fuzzing .
-    2. CLI uploads project to MinIO
+    1. User runs: ff workflow run cargo_fuzzing .
+    2. CLI uploads Rust project to MinIO
     3. Worker downloads project
-    4. Worker fuzzes TestOneInput() function
-    5. Crashes reported as findings
+    4. Worker discovers fuzz targets in fuzz/fuzz_targets/
+    5. Worker fuzzes the target with cargo-fuzz
+    6. Crashes reported as findings
     """
 
     @workflow.run
     async def run(
         self,
         target_id: str,  # MinIO UUID of uploaded user code
-        target_file: Optional[str] = None,  # Optional: specific file to fuzz
+        target_name: Optional[str] = None,  # Optional: specific fuzz target name
         max_iterations: int = 1000000,
-        timeout_seconds: int = 1800  # 30 minutes default for fuzzing
+        timeout_seconds: int = 1800,  # 30 minutes default for fuzzing
+        sanitizer: str = "address"
     ) -> Dict[str, Any]:
         """
         Main workflow execution.
 
         Args:
             target_id: UUID of the uploaded target in MinIO
-            target_file: Optional specific Python file with TestOneInput() (auto-discovered if None)
+            target_name: Optional specific fuzz target name (auto-discovered if None)
             max_iterations: Maximum fuzzing iterations
             timeout_seconds: Fuzzing timeout in seconds
+            sanitizer: Sanitizer to use (address, memory, undefined)
 
         Returns:
             Dictionary containing findings and summary
@@ -53,10 +56,10 @@ class AtherisFuzzingWorkflow:
         workflow_id = workflow.info().workflow_id
 
         workflow.logger.info(
-            f"Starting AtherisFuzzingWorkflow "
+            f"Starting CargoFuzzingWorkflow "
             f"(workflow_id={workflow_id}, target_id={target_id}, "
-            f"target_file={target_file or 'auto-discover'}, max_iterations={max_iterations}, "
-            f"timeout_seconds={timeout_seconds})"
+            f"target_name={target_name or 'auto-discover'}, max_iterations={max_iterations}, "
+            f"timeout_seconds={timeout_seconds}, sanitizer={sanitizer})"
         )
 
         results = {
@@ -67,7 +70,7 @@ class AtherisFuzzingWorkflow:
         }
 
         try:
-            # Step 1: Download user's project from MinIO
+            # Step 1: Download user's Rust project from MinIO
             workflow.logger.info("Step 1: Downloading user code from MinIO")
             target_path = await workflow.execute_activity(
                 "get_target",
@@ -86,23 +89,25 @@ class AtherisFuzzingWorkflow:
             })
             workflow.logger.info(f"✓ User code downloaded to: {target_path}")
 
-            # Step 2: Run Atheris fuzzing
-            workflow.logger.info("Step 2: Running Atheris fuzzing")
+            # Step 2: Run cargo-fuzz
+            workflow.logger.info("Step 2: Running cargo-fuzz")
 
             # Use defaults if parameters are None
             actual_max_iterations = max_iterations if max_iterations is not None else 1000000
             actual_timeout_seconds = timeout_seconds if timeout_seconds is not None else 1800
+            actual_sanitizer = sanitizer if sanitizer is not None else "address"
 
             fuzz_config = {
-                "target_file": target_file,
+                "target_name": target_name,
                 "max_iterations": actual_max_iterations,
-                "timeout_seconds": actual_timeout_seconds
+                "timeout_seconds": actual_timeout_seconds,
+                "sanitizer": actual_sanitizer
             }
 
             fuzz_results = await workflow.execute_activity(
-                "fuzz_with_atheris",
+                "fuzz_with_cargo",
                 args=[target_path, fuzz_config],
-                start_to_close_timeout=timedelta(seconds=actual_timeout_seconds + 60),
+                start_to_close_timeout=timedelta(seconds=actual_timeout_seconds + 120),
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=2),
                     maximum_interval=timedelta(seconds=60),

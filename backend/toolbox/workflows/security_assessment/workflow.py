@@ -16,7 +16,6 @@ Comprehensive security analysis using multiple modules.
 # Additional attribution and requirements are provided in the NOTICE file.
 
 from datetime import timedelta
-from pathlib import Path
 from typing import Dict, Any, Optional
 
 from temporalio import workflow

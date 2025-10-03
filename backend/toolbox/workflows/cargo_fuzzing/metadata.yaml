@@ -1,26 +1,27 @@
-name: atheris_fuzzing
+name: cargo_fuzzing
 version: "1.0.0"
-vertical: python
-description: "Fuzz Python code using Atheris with real-time monitoring. Automatically discovers and fuzzes TestOneInput() functions in user code."
+vertical: rust
+description: "Fuzz Rust code using cargo-fuzz with real-time monitoring. Automatically discovers and fuzzes fuzz_target!() functions in user code."
 author: "FuzzForge Team"
 tags:
   - "fuzzing"
-  - "atheris"
-  - "python"
-  - "coverage"
-  - "security"
+  - "cargo-fuzz"
+  - "rust"
+  - "libfuzzer"
+  - "memory-safety"
 
 default_parameters:
-  target_file: null
+  target_name: null
   max_iterations: 1000000
   timeout_seconds: 1800
+  sanitizer: "address"
 
 parameters:
   type: object
   properties:
-    target_file:
+    target_name:
       type: string
-      description: "Python file with TestOneInput() function (auto-discovered if not specified)"
+      description: "Fuzz target name from fuzz/fuzz_targets/ (auto-discovered if not specified)"
     max_iterations:
       type: integer
       default: 1000000
@@ -29,13 +30,18 @@ parameters:
       type: integer
       default: 1800
       description: "Fuzzing timeout in seconds (30 minutes)"
+    sanitizer:
+      type: string
+      enum: ["address", "memory", "undefined"]
+      default: "address"
+      description: "Sanitizer to use (address, memory, undefined)"
 
 output_schema:
   type: object
   properties:
     findings:
       type: array
-      description: "Crashes and vulnerabilities found during fuzzing"
+      description: "Crashes and memory safety issues found during fuzzing"
       items:
         type: object
         properties:

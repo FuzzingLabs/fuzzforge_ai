@@ -109,7 +109,7 @@ async def generate_sarif_report_activity(
     Returns:
         SARIF report dictionary
     """
-    logger.info(f"Activity: generate_sarif_report")
+    logger.info("Activity: generate_sarif_report")
 
     try:
         from modules.reporter import SARIFReporter

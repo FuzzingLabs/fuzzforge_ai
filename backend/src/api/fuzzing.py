@@ -14,8 +14,8 @@ API endpoints for fuzzing workflow management and real-time monitoring
 # Additional attribution and requirements are provided in the NOTICE file.
 
 import logging
-from typing import List, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from typing import List, Dict
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
@@ -125,12 +125,13 @@ async def update_fuzzing_stats(run_id: str, stats: FuzzingStats):
     # Debug: log reception for live instrumentation
     try:
         logger.info(
-            "Received fuzzing stats update: run_id=%s exec=%s eps=%.2f crashes=%s corpus=%s elapsed=%ss",
+            "Received fuzzing stats update: run_id=%s exec=%s eps=%.2f crashes=%s corpus=%s coverage=%s elapsed=%ss",
             run_id,
             stats.executions,
             stats.executions_per_sec,
             stats.crashes,
             stats.corpus_size,
+            stats.coverage,
             stats.elapsed_time,
         )
     except Exception:

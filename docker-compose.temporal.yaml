@@ -269,6 +269,66 @@ services:
           memory: 256M
 
   # ============================================================================
+  # Vertical Worker: Secret Detection
+  # ============================================================================
+  worker-secrets:
+    build:
+      context: ./workers/secrets
+      dockerfile: Dockerfile
+    container_name: fuzzforge-worker-secrets
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # Temporal configuration
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+
+      # Worker configuration
+      WORKER_VERTICAL: secrets
+      WORKER_TASK_QUEUE: secrets-queue
+      MAX_CONCURRENT_ACTIVITIES: 5
+
+      # Storage configuration (MinIO)
+      STORAGE_BACKEND: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: fuzzforge
+      S3_SECRET_KEY: fuzzforge123
+      S3_BUCKET: targets
+      S3_REGION: us-east-1
+      S3_USE_SSL: "false"
+
+      # Cache configuration
+      CACHE_DIR: /cache
+      CACHE_MAX_SIZE: 10GB
+      CACHE_TTL: 7d
+
+      # Logging
+      LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: 1
+    volumes:
+      # Mount workflow code (read-only) for dynamic discovery
+      - ./backend/toolbox:/app/toolbox:ro
+      # Worker cache for downloaded targets
+      - worker_secrets_cache:/cache
+    networks:
+      - fuzzforge-network
+    restart: unless-stopped
+    # Resource limits (lighter than rust)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # ============================================================================
   # Vertical Worker: Android Security
   # ============================================================================
   worker-android:
@@ -391,6 +451,8 @@ volumes:
     name: fuzzforge_worker_rust_cache
   worker_python_cache:
     name: fuzzforge_worker_python_cache
+  worker_secrets_cache:
+    name: fuzzforge_worker_secrets_cache
   worker_android_cache:
     name: fuzzforge_worker_android_cache
   # Add more worker caches as you add verticals:

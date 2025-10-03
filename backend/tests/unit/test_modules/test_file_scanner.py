@@ -2,14 +2,13 @@
 Unit tests for FileScanner module
 """
 
-import pytest
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "toolbox"))
 
-from modules.scanner.file_scanner import FileScanner
 
 
 @pytest.mark.asyncio

@@ -24,7 +24,7 @@ jobs:
           pip install ruff mypy
 
       - name: Run ruff
-        run: ruff check backend/src backend/toolbox --output-format=github
+        run: ruff check backend/src backend/toolbox backend/tests backend/benchmarks --output-format=github
 
       - name: Run mypy (continue on error)
         run: mypy backend/src backend/toolbox || true

@@ -231,8 +231,7 @@ def _lookup_workflow(workflow_name: str):
         "required_modules": metadata.get("required_modules", []),
         "supported_volume_modes": supported_modes,
         "default_target_path": default_target_path,
-        "default_volume_mode": default_volume_mode,
-        "has_custom_docker": bool(info.has_docker),
+        "default_volume_mode": default_volume_mode
     }
 
 
@@ -262,8 +261,7 @@ async def list_workflows_mcp() -> Dict[str, Any]:
             or defaults.get("volume_mode")
             or "ro",
             "default_target_path": metadata.get("default_target_path")
-            or defaults.get("target_path"),
-            "has_custom_docker": bool(info.has_docker),
+            or defaults.get("target_path")
         })
     return {"workflows": workflows_summary, "temporal": get_temporal_status()}
 

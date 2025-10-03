@@ -1,62 +1,84 @@
 """
-Example application with a stateful vulnerability.
+Example application with a waterfall vulnerability.
 
-This simulates a password checking system that leaks state information
-through a global progress variable - a classic waterfall vulnerability.
+This simulates a password checking system that validates character-by-character.
+Each correct character creates a distinct code path, allowing coverage-guided
+fuzzing to progressively discover the secret.
 """
 
-# Global state - simulates session state
-progress = 0
-SECRET = "FUZZINGLABS"  # 11 characters
+SECRET = b"FUZZINGLABS"  # Full secret to discover
 
 
-def check_secret(input_data: bytes) -> bool:
+def check_secret(input_data: bytes) -> int:
     """
     Vulnerable function: checks secret character by character.
 
-    This is a waterfall vulnerability - state leaks through the progress variable.
+    This is a classic waterfall/sequential comparison vulnerability.
+    Each correct character comparison creates a unique code path that
+    coverage-guided fuzzing can detect and use to guide input generation.
 
     Real-world analogy:
     - Timing attacks on password checkers
     - Protocol state machines with sequential validation
-    - Multi-step authentication flows
+    - JWT signature verification vulnerabilities
 
     Args:
         input_data: Input bytes to check
 
     Returns:
-        True if progress was made, False otherwise
+        Number of matching characters (for instrumentation purposes)
 
     Raises:
-        SystemError: When complete secret is discovered (vulnerability trigger)
+        SystemError: When complete secret is discovered
     """
-    global progress
+    if not input_data:
+        return 0
 
-    if len(input_data) > progress:
-        if input_data[progress] == ord(SECRET[progress]):
-            progress += 1
+    # Check each character sequentially
+    # Each comparison creates a distinct code path for coverage guidance
+    matches = 0
+    for i in range(min(len(input_data), len(SECRET))):
+        if input_data[i] != SECRET[i]:
+            # Wrong character - stop checking
+            return matches
 
-            # Progress indicator (useful for monitoring during fuzzing)
-            if progress % 2 == 0:  # Every 2 characters
-                print(f"[DEBUG] Progress: {progress}/{len(SECRET)} characters matched")
+        matches += 1
 
-            # VULNERABILITY: Crashes when complete secret found
-            if progress == len(SECRET):
-                raise SystemError(f"SECRET COMPROMISED: {SECRET}")
+        # Add explicit comparisons to help coverage-guided fuzzing
+        # Each comparison creates a distinct code path for Atheris to detect
+        if matches >= 1 and input_data[0] == ord('F'):
+            pass  # F
+        if matches >= 2 and input_data[1] == ord('U'):
+            pass  # FU
+        if matches >= 3 and input_data[2] == ord('Z'):
+            pass  # FUZ
+        if matches >= 4 and input_data[3] == ord('Z'):
+            pass  # FUZZ
+        if matches >= 5 and input_data[4] == ord('I'):
+            pass  # FUZZI
+        if matches >= 6 and input_data[5] == ord('N'):
+            pass  # FUZZIN
+        if matches >= 7 and input_data[6] == ord('G'):
+            pass  # FUZZING
+        if matches >= 8 and input_data[7] == ord('L'):
+            pass  # FUZZINGL
+        if matches >= 9 and input_data[8] == ord('A'):
+            pass  # FUZZINGLA
+        if matches >= 10 and input_data[9] == ord('B'):
+            pass  # FUZZINGLAB
+        if matches >= 11 and input_data[10] == ord('S'):
+            pass  # FUZZINGLABS
 
-            return True
-        else:
-            # Wrong character - reset progress
-            progress = 0
-            return False
+    # VULNERABILITY: Crashes when complete secret found
+    if matches == len(SECRET) and len(input_data) >= len(SECRET):
+        raise SystemError(f"SECRET COMPROMISED! Found: {input_data[:len(SECRET)]}")
 
-    return False
+    return matches
 
 
 def reset_state():
-    """Reset the global state (useful for testing)"""
-    global progress
-    progress = 0
+    """Reset the global state (kept for compatibility, but not used)"""
+    pass
 
 
 if __name__ == "__main__":
@@ -73,17 +95,16 @@ if __name__ == "__main__":
         b"F",           # First char correct
         b"FU",          # First two chars correct
         b"FUZ",         # First three chars correct
-        b"WRONG",       # Wrong - resets progress
+        b"WRONG",       # Wrong - no matches
         b"FUZZINGLABS", # Complete secret - triggers crash!
     ]
 
     for test in test_inputs:
-        reset_state()  # Start fresh for each test
         print(f"Testing input: {test.decode(errors='ignore')!r}")
 
         try:
-            result = check_secret(test)
-            print(f"  Result: {result}, Progress: {progress}/{len(SECRET)}")
+            matches = check_secret(test)
+            print(f"  Result: {matches} characters matched out of {len(SECRET)}")
         except SystemError as e:
             print(f"  💥 CRASH: {e}")
 

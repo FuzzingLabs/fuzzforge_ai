@@ -16,7 +16,6 @@ API endpoints for workflow management with enhanced error handling
 import logging
 import traceback
 import tempfile
-import shutil
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pathlib import Path
@@ -166,8 +165,7 @@ async def get_workflow_metadata(
         tags=metadata.get("tags", []),
         parameters=metadata.get("parameters", {}),
         default_parameters=metadata.get("default_parameters", {}),
-        required_modules=metadata.get("required_modules", []),
-        has_custom_docker=metadata.get("has_docker", False)
+        required_modules=metadata.get("required_modules", [])
     )
 
 
@@ -221,6 +219,7 @@ async def submit_workflow(
         )
 
         # Merge default parameters with user parameters
+        workflow_info = temporal_mgr.workflows[workflow_name]
         metadata = workflow_info.metadata or {}
         defaults = metadata.get("default_parameters", {})
         user_params = submission.parameters or {}

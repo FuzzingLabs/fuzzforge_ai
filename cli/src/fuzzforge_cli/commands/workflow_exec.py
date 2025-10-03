@@ -332,22 +332,22 @@ def execute_workflow(
                 # Don't fail the whole operation if database save fails
                 console.print(f"⚠️  Failed to save execution to database: {e}", style="yellow")
 
-            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor {response.run_id}[/bold cyan]")
+            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor stats {response.run_id}[/bold cyan]")
             console.print(f"💡 Check status: [bold cyan]fuzzforge workflow status {response.run_id}[/bold cyan]")
 
             # Suggest --live for fuzzing workflows
             if not live and not wait and "fuzzing" in workflow.lower():
-                console.print(f"💡 Next time try: [bold cyan]fuzzforge workflow {workflow} {target_path} --live[/bold cyan] for real-time fuzzing dashboard", style="dim")
+                console.print(f"💡 Next time try: [bold cyan]fuzzforge workflow {workflow} {target_path} --live[/bold cyan] for real-time monitoring", style="dim")
 
             # Start live monitoring if requested
             if live:
                 # Check if this is a fuzzing workflow to show appropriate messaging
                 is_fuzzing = "fuzzing" in workflow.lower()
                 if is_fuzzing:
-                    console.print(f"\n📺 Starting live fuzzing dashboard...")
+                    console.print(f"\n📺 Starting live fuzzing monitor...")
                     console.print("💡 You'll see real-time crash discovery, execution stats, and coverage data.")
                 else:
-                    console.print(f"\n📺 Starting live monitoring dashboard...")
+                    console.print(f"\n📺 Starting live monitoring...")
 
                 console.print("Press Ctrl+C to stop monitoring (execution continues in background).\n")
 
@@ -622,7 +622,7 @@ def retry_workflow(
             except Exception as e:
                 console.print(f"⚠️  Failed to save execution to database: {e}", style="yellow")
 
-            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor {response.run_id}[/bold cyan]")
+            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor stats {response.run_id}[/bold cyan]")
 
     except Exception as e:
         handle_error(e, "retrying workflow")

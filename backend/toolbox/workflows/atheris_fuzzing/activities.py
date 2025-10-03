@@ -9,7 +9,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
+import os
 
+import httpx
 from temporalio import activity
 
 # Configure logging
@@ -55,6 +57,35 @@ async def fuzz_activity(workspace_path: str, config: dict) -> dict:
         async def stats_callback(stats_data: Dict[str, Any]):
             """Callback for live fuzzing statistics"""
             try:
+                # Prepare stats payload for backend
+                coverage_value = stats_data.get("coverage", 0)
+                logger.info(f"COVERAGE_DEBUG: coverage from stats_data = {coverage_value}")
+
+                stats_payload = {
+                    "run_id": run_id,
+                    "workflow": "atheris_fuzzing",
+                    "executions": stats_data.get("total_execs", 0),
+                    "executions_per_sec": stats_data.get("execs_per_sec", 0.0),
+                    "crashes": stats_data.get("crashes", 0),
+                    "unique_crashes": stats_data.get("crashes", 0),
+                    "coverage": coverage_value,
+                    "corpus_size": stats_data.get("corpus_size", 0),
+                    "elapsed_time": stats_data.get("elapsed_time", 0),
+                    "last_crash_time": None
+                }
+
+                # POST stats to backend API for real-time monitoring
+                backend_url = os.getenv("BACKEND_URL", "http://backend:8000")
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    try:
+                        await client.post(
+                            f"{backend_url}/fuzzing/{run_id}/stats",
+                            json=stats_payload
+                        )
+                    except Exception as http_err:
+                        logger.debug(f"Failed to post stats to backend: {http_err}")
+
+                # Also log for debugging
                 logger.info("LIVE_STATS", extra={
                     "stats_type": "fuzzing_live_update",
                     "workflow_type": "atheris_fuzzing",
@@ -70,8 +101,9 @@ async def fuzz_activity(workspace_path: str, config: dict) -> dict:
             except Exception as e:
                 logger.warning(f"Error in stats callback: {e}")
 
-        # Add stats callback to config
+        # Add stats callback and run_id to config
         config["stats_callback"] = stats_callback
+        config["run_id"] = run_id
 
         # Execute the fuzzer module
         fuzzer = AtherisFuzzer()

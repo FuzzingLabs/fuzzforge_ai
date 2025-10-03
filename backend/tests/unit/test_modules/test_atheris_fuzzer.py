@@ -3,8 +3,7 @@ Unit tests for AtherisFuzzer module
 """
 
 import pytest
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio
@@ -148,7 +147,7 @@ if __name__ == "__main__":
                 # Put stats_callback in config dict, not as kwarg
                 atheris_config["target_file"] = "fuzz_target.py"
                 atheris_config["stats_callback"] = mock_stats_callback
-                result = await atheris_fuzzer.execute(atheris_config, python_test_workspace)
+                await atheris_fuzzer.execute(atheris_config, python_test_workspace)
 
                 # Verify callback was invoked
                 assert len(mock_stats_callback.stats_received) > 0

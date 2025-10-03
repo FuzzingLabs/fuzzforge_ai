@@ -51,8 +51,10 @@ RUN git clone https://github.com/AFLplusplus/AFLplusplus /tmp/aflplusplus && \
     cd / && \
     rm -rf /tmp/aflplusplus
 
-# Install Rust toolchain components
-RUN rustup component add rustfmt clippy && \
+# Install Rust toolchain components (nightly required for cargo-fuzz)
+RUN rustup install nightly && \
+    rustup default nightly && \
+    rustup component add rustfmt clippy && \
     rustup target add x86_64-unknown-linux-musl
 
 # Install cargo-fuzz and other Rust security tools

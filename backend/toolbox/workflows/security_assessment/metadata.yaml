@@ -3,7 +3,6 @@ version: "2.0.0"
 vertical: rust
 description: "Comprehensive security assessment workflow that scans files, analyzes code for vulnerabilities, and generates SARIF reports"
 author: "FuzzForge Team"
-category: "comprehensive"
 tags:
   - "security"
   - "scanner"
@@ -11,18 +10,6 @@ tags:
   - "static-analysis"
   - "sarif"
   - "comprehensive"
-
-requirements:
-  tools:
-    - "file_scanner"
-    - "security_analyzer"
-    - "sarif_reporter"
-  resources:
-    memory: "512Mi"
-    cpu: "500m"
-    timeout: 1800
-
-has_docker: true
 
 default_parameters:
   scanner_config: {}

@@ -13,7 +13,6 @@ Real-time monitoring and statistics commands.
 # Additional attribution and requirements are provided in the NOTICE file.
 
 
-import asyncio
 import time
 from datetime import datetime, timedelta
 from typing import Optional
@@ -23,9 +22,6 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.live import Live
-from rich.layout import Layout
-from rich.progress import Progress, BarColumn, TextColumn, SpinnerColumn
-from rich.align import Align
 from rich import box
 
 from ..config import get_project_config, FuzzForgeConfig
@@ -93,9 +89,21 @@ def fuzzing_stats(
                 with Live(auto_refresh=False, console=console) as live:
                     while True:
                         try:
+                            # Check workflow status
+                            run_status = client.get_run_status(run_id)
                             stats = client.get_fuzzing_stats(run_id)
                             table = create_stats_table(stats)
                             live.update(table, refresh=True)
+
+                            # Exit if workflow completed or failed
+                            if getattr(run_status, 'is_completed', False) or getattr(run_status, 'is_failed', False):
+                                final_status = getattr(run_status, 'status', 'Unknown')
+                                if getattr(run_status, 'is_completed', False):
+                                    console.print("\n✅ [bold green]Workflow completed[/bold green]", style="green")
+                                else:
+                                    console.print(f"\n⚠️ [bold yellow]Workflow ended[/bold yellow] | Status: {final_status}", style="yellow")
+                                break
+
                             time.sleep(refresh)
                         except KeyboardInterrupt:
                             console.print("\n📊 Monitoring stopped", style="yellow")
@@ -124,8 +132,8 @@ def create_stats_table(stats) -> Panel:
     stats_table.add_row("Total Crashes", format_number(stats.crashes))
     stats_table.add_row("Unique Crashes", format_number(stats.unique_crashes))
 
-    if stats.coverage is not None:
-        stats_table.add_row("Code Coverage", f"{stats.coverage:.1f}%")
+    if stats.coverage is not None and stats.coverage > 0:
+        stats_table.add_row("Code Coverage", f"{stats.coverage} edges")
 
     stats_table.add_row("Corpus Size", format_number(stats.corpus_size))
     stats_table.add_row("Elapsed Time", format_duration(stats.elapsed_time))
@@ -260,78 +268,70 @@ def crash_reports(
 
 
 def _live_monitor(run_id: str, refresh: int):
-    """Helper for live monitoring to allow for cleaner exit handling"""
+    """Helper for live monitoring with inline real-time display"""
     with get_client() as client:
         start_time = time.time()
 
-        def render_layout(run_status, stats):
-            layout = Layout()
-            layout.split_column(
-                Layout(name="header", size=3),
-                Layout(name="main", ratio=1),
-                Layout(name="footer", size=3)
-            )
-            layout["main"].split_row(
-                Layout(name="stats", ratio=1),
-                Layout(name="progress", ratio=1)
-            )
-            header = Panel(
-                f"[bold]FuzzForge Live Monitor[/bold]\n"
-                f"Run: {run_id[:12]}... | Status: {run_status.status} | "
-                f"Uptime: {format_duration(int(time.time() - start_time))}",
-                box=box.ROUNDED,
-                style="cyan"
-            )
-            layout["header"].update(header)
-            layout["stats"].update(create_stats_table(stats))
+        def render_inline_stats(run_status, stats):
+            """Render inline stats display (non-dashboard)"""
+            lines = []
 
-            progress_table = Table(show_header=False, box=box.SIMPLE)
-            progress_table.add_column("Metric", style="bold")
-            progress_table.add_column("Progress")
-            if stats.executions > 0:
-                exec_rate_percent = min(100, (stats.executions_per_sec / 1000) * 100)
-                progress_table.add_row("Exec Rate", create_progress_bar(exec_rate_percent, "green"))
-                crash_rate = (stats.crashes / stats.executions) * 100000
-                crash_rate_percent = min(100, crash_rate * 10)
-                progress_table.add_row("Crash Rate", create_progress_bar(crash_rate_percent, "red"))
-            if stats.coverage is not None:
-                progress_table.add_row("Coverage", create_progress_bar(stats.coverage, "blue"))
-            layout["progress"].update(Panel.fit(progress_table, title="📊 Progress Indicators", box=box.ROUNDED))
+            # Header line
+            workflow_name = getattr(stats, 'workflow', 'unknown')
+            status_emoji = "🔄" if not getattr(run_status, 'is_completed', False) else "✅"
+            status_color = "yellow" if not getattr(run_status, 'is_completed', False) else "green"
 
-            footer = Panel(
-                f"Last updated: {datetime.now().strftime('%H:%M:%S')} | "
-                f"Refresh interval: {refresh}s | Press Ctrl+C to exit",
-                box=box.ROUNDED,
-                style="dim"
-            )
-            layout["footer"].update(footer)
-            return layout
+            lines.append(f"\n[bold cyan]📊 Live Fuzzing Monitor[/bold cyan] - {workflow_name} (Run: {run_id[:12]}...)\n")
 
-        with Live(auto_refresh=False, console=console, screen=True) as live:
+            # Stats lines with emojis
+            lines.append(f"  [bold]⚡ Executions[/bold]     {format_number(stats.executions):>8}  [dim]({stats.executions_per_sec:,.1f}/sec)[/dim]")
+            lines.append(f"  [bold]💥 Crashes[/bold]        {stats.crashes:>8}  [dim](unique: {stats.unique_crashes})[/dim]")
+            lines.append(f"  [bold]📦 Corpus[/bold]         {stats.corpus_size:>8} inputs")
+
+            if stats.coverage is not None and stats.coverage > 0:
+                lines.append(f"  [bold]📈 Coverage[/bold]       {stats.coverage:>8} edges")
+
+            lines.append(f"  [bold]⏱️  Elapsed[/bold]        {format_duration(stats.elapsed_time):>8}")
+
+            # Last crash info
+            if stats.last_crash_time:
+                time_since = datetime.now() - stats.last_crash_time
+                crash_ago = format_duration(int(time_since.total_seconds()))
+                lines.append(f"  [bold red]🐛 Last Crash[/bold red]    {crash_ago:>8} ago")
+
+            # Status line
+            status_text = getattr(run_status, 'status', 'Unknown')
+            current_time = datetime.now().strftime('%H:%M:%S')
+            lines.append(f"\n[{status_color}]{status_emoji} Status: {status_text}[/{status_color}] | Last update: [dim]{current_time}[/dim] | Refresh: {refresh}s | [dim]Press Ctrl+C to stop[/dim]")
+
+            return "\n".join(lines)
+
+        # Fallback stats class
+        class FallbackStats:
+            def __init__(self, run_id):
+                self.run_id = run_id
+                self.workflow = "unknown"
+                self.executions = 0
+                self.executions_per_sec = 0.0
+                self.crashes = 0
+                self.unique_crashes = 0
+                self.coverage = None
+                self.corpus_size = 0
+                self.elapsed_time = 0
+                self.last_crash_time = None
+
+        with Live(auto_refresh=False, console=console) as live:
             # Initial fetch
             try:
                 run_status = client.get_run_status(run_id)
                 stats = client.get_fuzzing_stats(run_id)
             except Exception:
-                # Minimal fallback stats
-                class FallbackStats:
-                    def __init__(self, run_id):
-                        self.run_id = run_id
-                        self.workflow = "unknown"
-                        self.executions = 0
-                        self.executions_per_sec = 0.0
-                        self.crashes = 0
-                        self.unique_crashes = 0
-                        self.coverage = None
-                        self.corpus_size = 0
-                        self.elapsed_time = 0
-                        self.last_crash_time = None
                 stats = FallbackStats(run_id)
                 run_status = type("RS", (), {"status":"Unknown","is_completed":False,"is_failed":False})()
 
-            live.update(render_layout(run_status, stats), refresh=True)
+            live.update(render_inline_stats(run_status, stats), refresh=True)
 
-            # Simple polling approach that actually works
+            # Polling loop
             consecutive_errors = 0
             max_errors = 5
 
@@ -344,7 +344,7 @@ def _live_monitor(run_id: str, refresh: int):
                     except Exception as e:
                         consecutive_errors += 1
                         if consecutive_errors >= max_errors:
-                            console.print(f"❌ Too many errors getting run status: {e}", style="red")
+                            console.print(f"\n❌ Too many errors getting run status: {e}", style="red")
                             break
                         time.sleep(refresh)
                         continue
@@ -352,18 +352,14 @@ def _live_monitor(run_id: str, refresh: int):
                     # Try to get fuzzing stats
                     try:
                         stats = client.get_fuzzing_stats(run_id)
-                    except Exception as e:
-                        # Create fallback stats if not available
+                    except Exception:
                         stats = FallbackStats(run_id)
 
                     # Update display
-                    live.update(render_layout(run_status, stats), refresh=True)
+                    live.update(render_inline_stats(run_status, stats), refresh=True)
 
                     # Check if completed
                     if getattr(run_status, 'is_completed', False) or getattr(run_status, 'is_failed', False):
-                        # Show final state for a few seconds
-                        console.print("\n🏁 Run completed. Showing final state for 10 seconds...")
-                        time.sleep(10)
                         break
 
                     # Wait before next poll
@@ -372,17 +368,17 @@ def _live_monitor(run_id: str, refresh: int):
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
-                    console.print(f"⚠️ Monitoring error: {e}", style="yellow")
+                    console.print(f"\n⚠️ Monitoring error: {e}", style="yellow")
                     time.sleep(refresh)
 
-            # Completed status update
-            final_message = (
-                f"[bold]FuzzForge Live Monitor - COMPLETED[/bold]\n"
-                f"Run: {run_id[:12]}... | Status: {run_status.status} | "
-                f"Total runtime: {format_duration(int(time.time() - start_time))}"
-            )
-            style = "green" if getattr(run_status, 'is_completed', False) else "red"
-            live.update(Panel(final_message, box=box.ROUNDED, style=style), refresh=True)
+            # Final status
+            final_status = getattr(run_status, 'status', 'Unknown')
+            total_time = format_duration(int(time.time() - start_time))
+
+            if getattr(run_status, 'is_completed', False):
+                console.print(f"\n✅ [bold green]Run completed successfully[/bold green] | Total runtime: {total_time}")
+            else:
+                console.print(f"\n⚠️ [bold yellow]Run ended[/bold yellow] | Status: {final_status} | Total runtime: {total_time}")
 
 
 @app.command("live")
@@ -390,21 +386,18 @@ def live_monitor(
     run_id: str = typer.Argument(..., help="Run ID to monitor live"),
     refresh: int = typer.Option(
         2, "--refresh", "-r",
-        help="Refresh interval in seconds (fallback when streaming unavailable)"
+        help="Refresh interval in seconds"
     )
 ):
     """
-    📺 Real-time monitoring dashboard with live updates (WebSocket/SSE with REST fallback)
+    📺 Real-time inline monitoring with live statistics updates
     """
-    console.print(f"📺 [bold]Live Monitoring Dashboard[/bold]")
-    console.print(f"Run: {run_id}")
-    console.print(f"Press Ctrl+C to stop monitoring\n")
     try:
         _live_monitor(run_id, refresh)
     except KeyboardInterrupt:
-        console.print("\n📊 Monitoring stopped by user.", style="yellow")
+        console.print("\n\n📊 Monitoring stopped by user.", style="yellow")
     except Exception as e:
-        console.print(f"❌ Failed to start live monitoring: {e}", style="red")
+        console.print(f"\n❌ Failed to start live monitoring: {e}", style="red")
         raise typer.Exit(1)
 
 
@@ -426,11 +419,11 @@ def monitor_callback(ctx: typer.Context):
         # Let the subcommand handle it
         return
 
-    # Show not implemented message for default command
+    # Show help message for default command
     from rich.console import Console
     console = Console()
-    console.print("🚧 [yellow]Monitor command is not fully implemented yet.[/yellow]")
-    console.print("Please use specific subcommands:")
+    console.print("📊 [bold cyan]Monitor Command[/bold cyan]")
+    console.print("\nAvailable subcommands:")
     console.print("  • [cyan]ff monitor stats <run-id>[/cyan] - Show execution statistics")
     console.print("  • [cyan]ff monitor crashes <run-id>[/cyan] - Show crash reports")
-    console.print("  • [cyan]ff monitor live <run-id>[/cyan] - Live monitoring dashboard")
+    console.print("  • [cyan]ff monitor live <run-id>[/cyan] - Real-time inline monitoring")

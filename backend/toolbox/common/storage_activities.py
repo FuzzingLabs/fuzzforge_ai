@@ -61,7 +61,15 @@ async def get_target_activity(target_id: str) -> str:
         # Update access time for LRU
         cached_file.touch()
         logger.info(f"Cache HIT: {target_id}")
-        return str(cached_file)
+
+        # Check if workspace directory exists (extracted tarball)
+        workspace_dir = cache_path / "workspace"
+        if workspace_dir.exists() and workspace_dir.is_dir():
+            logger.info(f"Returning cached workspace: {workspace_dir}")
+            return str(workspace_dir)
+        else:
+            # Return cached file (not a tarball)
+            return str(cached_file)
 
     # Cache miss - download from MinIO
     logger.info(f"Cache MISS: {target_id}, downloading from MinIO...")

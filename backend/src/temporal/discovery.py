@@ -174,7 +174,7 @@ class WorkflowDiscovery:
         """
         return {
             "type": "object",
-            "required": ["name", "version", "description", "author", "category", "vertical", "parameters", "requirements"],
+            "required": ["name", "version", "description", "author", "vertical", "parameters"],
             "properties": {
                 "name": {
                     "type": "string",
@@ -252,11 +252,6 @@ class WorkflowDiscovery:
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Required module names"
-                },
-                "has_docker": {
-                    "type": "boolean",
-                    "default": False,
-                    "description": "Whether workflow has custom Docker build"
                 }
             }
         }

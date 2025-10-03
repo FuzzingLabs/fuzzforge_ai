@@ -10,8 +10,6 @@
 # Additional attribution and requirements are provided in the NOTICE file.
 
 import sys
-import tempfile
-import shutil
 from pathlib import Path
 from typing import Dict, Any
 import pytest
