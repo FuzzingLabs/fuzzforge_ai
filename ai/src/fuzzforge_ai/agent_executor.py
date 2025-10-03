@@ -103,6 +103,10 @@ class FuzzForgeExecutor:
         self._artifact_cache_dir = Path(os.getenv('FUZZFORGE_ARTIFACT_DIR', Path.cwd() / '.fuzzforge' / 'artifacts'))
         self._knowledge_integration = None
         self._mcp_toolset: Optional[McpToolset] = None
+        try:
+            self.project_config = ProjectConfigManager()
+        except Exception:
+            self.project_config = None
 
         # Initialize Cognee service if available
         self.cognee_service = None
