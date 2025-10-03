@@ -22,7 +22,7 @@ import typer
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
-from ..config import ensure_project_config
+from ..config import ensure_project_config, provision_cognee_service_for_project, get_project_config
 from ..database import ensure_project_db
 
 console = Console()
@@ -106,6 +106,20 @@ def project(
 
         _ensure_env_file(fuzzforge_dir, force)
         _ensure_agents_registry(fuzzforge_dir, force)
+
+        # Provision Cognee service user/tenant/dataset if service mode is enabled
+        console.print("🧠 Provisioning Cognee service credentials...")
+        provision_result = provision_cognee_service_for_project(current_dir)
+
+        if provision_result["status"] == "success":
+            console.print(f"   ✅ Created user: {provision_result.get('user', 'N/A')}", style="green")
+            console.print(f"   ✅ Created tenant: {provision_result.get('tenant', 'N/A')}", style="green")
+            console.print(f"   ✅ Created dataset: {provision_result.get('dataset', 'N/A')}", style="green")
+        elif provision_result["status"] == "skipped":
+            console.print(f"   ⏭️  Skipped: {provision_result.get('message', 'N/A')}", style="dim")
+        elif provision_result["status"] == "error":
+            console.print(f"   ⚠️  Warning: {provision_result.get('message', 'N/A')}", style="yellow")
+            console.print("   💡 You can provision later when the service is available", style="dim")
 
         # Create .gitignore if needed
         gitignore_path = current_dir / ".gitignore"
@@ -211,6 +225,21 @@ def _ensure_env_file(fuzzforge_dir: Path, force: bool) -> None:
     session_db_path = fuzzforge_dir / "fuzzforge_sessions.db"
     session_db_rel = session_db_path.relative_to(fuzzforge_dir.parent)
 
+    project_config = get_project_config(fuzzforge_dir.parent)
+    cognee_cfg = project_config.cognee if project_config else None
+
+    service_url_default = "http://localhost:18000"
+    service_url = os.getenv("COGNEE_SERVICE_URL") or (cognee_cfg.service_url if cognee_cfg and cognee_cfg.service_url else service_url_default)
+    service_port = os.getenv("COGNEE_SERVICE_PORT") or "18000"
+    s3_bucket = os.getenv("COGNEE_S3_BUCKET") or (cognee_cfg.s3_bucket if cognee_cfg and cognee_cfg.s3_bucket else "cognee-bucket")
+    s3_prefix = os.getenv("COGNEE_S3_PREFIX") or (cognee_cfg.s3_prefix if cognee_cfg and cognee_cfg.s3_prefix else "cognee/projects")
+    service_email = os.getenv("COGNEE_SERVICE_USER_EMAIL") or (cognee_cfg.service_user_email if cognee_cfg and cognee_cfg.service_user_email else "")
+    service_password = os.getenv("COGNEE_SERVICE_USER_PASSWORD") or (cognee_cfg.service_user_password if cognee_cfg and cognee_cfg.service_user_password else "")
+    aws_endpoint = os.getenv("COGNEE_AWS_ENDPOINT_URL") or ""
+    aws_region = os.getenv("COGNEE_AWS_REGION") or ""
+    aws_access = os.getenv("COGNEE_AWS_ACCESS_KEY_ID") or ""
+    aws_secret = os.getenv("COGNEE_AWS_SECRET_ACCESS_KEY") or ""
+
     env_lines = [
         "# FuzzForge AI configuration",
         "# Populate the API key(s) that match your LLM provider",
@@ -227,6 +256,19 @@ def _ensure_env_file(fuzzforge_dir: Path, force: bool) -> None:
         f"LLM_COGNEE_API_KEY={api_key}",
         "LLM_COGNEE_ENDPOINT=",
         "COGNEE_MCP_URL=",
+        "",
+        "# Cognee service configuration",
+        "COGNEE_STORAGE_MODE=service",
+        f"COGNEE_SERVICE_URL={service_url}",
+        f"COGNEE_SERVICE_PORT={service_port}",
+        f"COGNEE_S3_BUCKET={s3_bucket}",
+        f"COGNEE_S3_PREFIX={s3_prefix}",
+        f"COGNEE_SERVICE_USER_EMAIL={service_email}",
+        f"COGNEE_SERVICE_USER_PASSWORD={service_password}",
+        f"COGNEE_AWS_ENDPOINT_URL={aws_endpoint}",
+        f"COGNEE_AWS_REGION={aws_region}",
+        f"COGNEE_AWS_ACCESS_KEY_ID={aws_access}",
+        f"COGNEE_AWS_SECRET_ACCESS_KEY={aws_secret}",
         "",
         "# Session persistence options: inmemory | sqlite",
         "SESSION_PERSISTENCE=sqlite",

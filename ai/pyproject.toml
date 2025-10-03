@@ -16,7 +16,8 @@ dependencies = [
     "fastmcp",
     "mcp",
     "typing-extensions",
-    "cognee>=0.3.0",
+    "cognee @ file://../cognee/cognee",
+    "python-dotenv",
 ]
 
 [project.optional-dependencies]

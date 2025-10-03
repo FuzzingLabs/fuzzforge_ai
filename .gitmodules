@@ -1,0 +1,4 @@
+[submodule "cognee/cognee"]
+	path = cognee/cognee
+	url = https://github.com/Songbird99/cognee.git
+	branch = main

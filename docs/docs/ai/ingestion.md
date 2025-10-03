@@ -38,14 +38,14 @@ All runs automatically skip `.fuzzforge/**` and `.git/**` to avoid recursive ing
 
 - Primary dataset: `<project>_codebase`
 - Additional datasets: create ad-hoc buckets such as `insights` via the `ingest_to_dataset` tool
-- Storage location: `.fuzzforge/cognee/project_<id>/`
+- Storage location: `.fuzzforge/cognee/project_<id>/` when running embedded, or `s3://<bucket>/cognee/projects/<project-id>/` when using the Cognee service mode.
 
 ### Persistence Details
 
-- Every dataset lives under `.fuzzforge/cognee/project_<id>/{data,system}`. These directories are safe to commit to long-lived storage (they only contain embeddings and metadata).
+- Every dataset lives under `.fuzzforge/cognee/project_<id>/{data,system}` when running locally. In service mode the same layout is mirrored to a shared S3 bucket so multiple projects can reuse the hosted Cognee instance without colliding.
 - Cognee assigns deterministic IDs per project; if you move the repository, copy the entire `.fuzzforge/cognee/` tree to retain graph history.
 - `HybridMemoryManager` ensures answers from Cognee are written back into the ADK session store so future prompts can refer to the same nodes without repeating the query.
-- All Cognee processing runs locally against the files you ingest. No external service calls are made unless you configure a remote Cognee endpoint.
+- In embedded mode all Cognee processing runs locally against the files you ingest. When `COGNEE_STORAGE_MODE=service`, the CLI streams files to the Cognee API, which stores them in the shared S3 prefix and runs the pipeline remotely before results flow back into the agent session.
 
 ## Prompt Examples
 
@@ -77,6 +77,12 @@ FUZZFORGE_MCP_URL=http://localhost:8010/mcp
 LLM_COGNEE_PROVIDER=openai
 LLM_COGNEE_MODEL=gpt-5-mini
 LLM_COGNEE_API_KEY=sk-your-key
+
+# Optional: hosted Cognee service
+COGNEE_STORAGE_MODE=service
+COGNEE_SERVICE_URL=http://localhost:8000
+COGNEE_S3_BUCKET=cognee-shared
+COGNEE_S3_PREFIX=cognee/projects
 ```
 
 Add comments or project-specific overrides as needed; the agent reads these variables on startup.

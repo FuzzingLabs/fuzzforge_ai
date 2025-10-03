@@ -12,7 +12,7 @@ Run the command from a project directory that already contains `.fuzzforge/`. Th
 
 **Default directories**
 - Logs: `.fuzzforge/logs/cognee.log`
-- Cognee datasets: `.fuzzforge/cognee/project_<id>/{data,system}`
+- Cognee datasets: `.fuzzforge/cognee/project_<id>/{data,system}` in embedded mode, or `s3://<bucket>/cognee/projects/<project-id>/` when the service backend is active.
 - Artifact cache: `.fuzzforge/artifacts`
 
 ## HTTP Endpoints

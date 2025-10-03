@@ -289,3 +289,4 @@ test_projects/*/.npmrc
 test_projects/*/.git-credentials
 test_projects/*/credentials.*
 test_projects/*/api_keys.*
+cognee/.env.service

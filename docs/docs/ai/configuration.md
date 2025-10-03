@@ -81,6 +81,23 @@ LLM_COGNEE_API_KEY=sk-your-key
 
 If the Cognee variables are omitted, graph-specific tools remain available but return a friendly "not configured" response.
 
+### Hosted Cognee Service
+
+See [Hosted Cognee Service](./cognee-service.md) for step-by-step instructions on starting the shared backend with Docker.
+
+When you want multiple projects to share a dedicated Cognee backend, point the CLI at the service and shared S3 bucket:
+
+```env
+COGNEE_STORAGE_MODE=service
+COGNEE_SERVICE_URL=http://localhost:8000
+COGNEE_S3_BUCKET=cognee-shared
+COGNEE_S3_PREFIX=cognee/projects
+COGNEE_SERVICE_USER_EMAIL=project_12345678@cognee.local
+COGNEE_SERVICE_USER_PASSWORD=super-secret
+```
+
+During initialisation the CLI writes these values to `.fuzzforge/cognee/service/project_<id>/.env`. Each project gets its own scoped dataset (default `<project>_codebase`) while the service persists metadata in `s3://<bucket>/<prefix>/` using the project and tenant identifiers.
+
 ## MCP / Backend Integration
 
 ```env

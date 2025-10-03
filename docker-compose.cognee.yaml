@@ -1,0 +1,116 @@
+version: "3.9"
+
+x-cognee-env-file: &cognee_env_file ${COGNEE_SERVICE_ENV_FILE:-./cognee/.env.service}
+
+services:
+  cognee:
+    container_name: cognee-service
+    build:
+      context: ./cognee/cognee
+      dockerfile: Dockerfile
+    env_file:
+      - *cognee_env_file
+    environment:
+      ENABLE_BACKEND_ACCESS_CONTROL: "true"
+      STORAGE_BACKEND: "s3"
+      DATA_ROOT_DIRECTORY: ${DATA_ROOT_DIRECTORY:-s3://cognee-bucket/data}
+      SYSTEM_ROOT_DIRECTORY: ${SYSTEM_ROOT_DIRECTORY:-s3://cognee-bucket/system}
+      # Uppercase for standard env
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-http://minio:9000}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-fuzzforge}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-fuzzforge123}
+      # Lowercase for boto3/s3fs
+      aws_endpoint_url: ${AWS_ENDPOINT_URL:-http://minio:9000}
+      aws_region: ${AWS_REGION:-us-east-1}
+      aws_access_key_id: ${AWS_ACCESS_KEY_ID:-fuzzforge}
+      aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY:-fuzzforge123}
+      # For LanceDB object_store
+      S3_ENDPOINT: ${AWS_ENDPOINT_URL:-http://minio:9000}
+      S3_REGION: ${AWS_REGION:-us-east-1}
+      S3_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-fuzzforge}
+      S3_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-fuzzforge123}
+      S3_ALLOW_HTTP: "true"
+      DB_PROVIDER: ${DB_PROVIDER:-postgres}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-cognee_db}
+      DB_USERNAME: ${DB_USERNAME:-cognee}
+      DB_PASSWORD: ${DB_PASSWORD:-cognee}
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${COGNEE_LOG_LEVEL:-INFO}
+    volumes:
+      - cognee-system:/app/.cognee_system
+      - cognee-data:/app/.data_storage
+    ports:
+      - "${COGNEE_SERVICE_PORT:-8000}:8000"
+    depends_on:
+      - postgres
+    networks:
+      - cognee
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: cognee-postgres
+    env_file:
+      - *cognee_env_file
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-cognee}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cognee}
+      POSTGRES_DB: ${DB_NAME:-cognee_db}
+    volumes:
+      - cognee-postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - cognee
+
+  minio:
+    image: minio/minio:latest
+    container_name: cognee-minio
+    command: server /data --console-address ":9001"
+    env_file:
+      - *cognee_env_file
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-fuzzforge}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-fuzzforge123}
+    volumes:
+      - cognee-minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - cognee
+    profiles:
+      - self-hosted-minio
+
+  minio-mc:
+    image: minio/mc:latest
+    container_name: cognee-minio-mc
+    depends_on:
+      minio:
+        condition: service_started
+    env_file:
+      - *cognee_env_file
+    entrypoint: |
+      /bin/sh -c "
+        sleep 3 && \
+        mc alias set cognee ${AWS_ENDPOINT_URL:-http://minio:9000} ${AWS_ACCESS_KEY_ID:-fuzzforge} ${AWS_SECRET_ACCESS_KEY:-fuzzforge123} && \
+        mc mb -p cognee/${STORAGE_BUCKET_NAME:-cognee-bucket} || true && \
+        mc anonymous set private cognee/${STORAGE_BUCKET_NAME:-cognee-bucket} && \
+        tail -f /dev/null
+      "
+    networks:
+      - cognee
+    profiles:
+      - self-hosted-minio
+
+networks:
+  cognee:
+    driver: bridge
+
+volumes:
+  cognee-system:
+  cognee-data:
+  cognee-postgres:
+  cognee-minio:
