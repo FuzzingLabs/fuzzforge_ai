@@ -89,6 +89,12 @@ class FuzzForgeAgent:
                 default_service_url=service_url,
             )
 
+        # Create Hybrid Memory Manager (ADK + Cognee direct integration)
+        self.memory_manager = HybridMemoryManager(
+            memory_service=self.memory_service,
+            cognee_tools=self.cognee_tools,
+        )
+
         # Create the executor (the brain) with memory and session services
         self.executor = FuzzForgeExecutor(
             model=self.model,
@@ -98,12 +104,6 @@ class FuzzForgeAgent:
             memory_manager=self.memory_manager,
             session_persistence=os.getenv('SESSION_PERSISTENCE', 'inmemory'),
             fuzzforge_mcp_url=os.getenv('FUZZFORGE_MCP_URL'),
-        )
-        
-        # Create Hybrid Memory Manager (ADK + Cognee direct integration)
-        self.memory_manager = HybridMemoryManager(
-            memory_service=self.memory_service,
-            cognee_tools=self.cognee_tools,
         )
         
         # Get the agent card (the identity)
