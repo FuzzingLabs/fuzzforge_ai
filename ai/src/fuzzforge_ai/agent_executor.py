@@ -438,105 +438,69 @@ class FuzzForgeExecutor:
                 return f"Error searching project knowledge: {e}"
         
         async def list_project_knowledge() -> str:
-            """List available knowledge and datasets in the project's knowledge graph"""
+            """List available knowledge and datasets in the project's knowledge graph."""
             try:
-                import logging
-                logger = logging.getLogger(__name__)
-                
-                # Use shared cognee service
-                cognee_service = await self._get_cognee_service()
-                config = cognee_service.config
-                
-                project_context = config.get_project_context()
-                result = f"Available knowledge in project {project_context['project_name']}:\n\n"
-                
-                # Use direct cognee import like ingest command does
-                try:
-                    import cognee
-                    from cognee.modules.search.types import SearchType
-                    
-                    # Set up user context like ingest command  
-                    try:
-                        from cognee.modules.users.methods import create_user, get_user
-                        
-                        user_email = f"project_{project_context['project_id']}@fuzzforge.example"
-                        user_tenant = project_context['tenant_id']
-                        
-                        try:
-                            user = await get_user(user_email)
-                            logger.info(f"Using existing user: {user_email}")
-                        except:
-                            try:
-                                user = await create_user(user_email, user_tenant)
-                                logger.info(f"Created new user: {user_email}")
-                            except:
-                                user = None
-                        
-                        if user:
-                            cognee.set_user(user)
-                    except Exception as e:
-                        logger.warning(f"User context setup failed: {e}")
-                    
-                    # List available datasets
-                    datasets = await cognee.datasets.list_datasets()
-                    logger.info(f"Found datasets: {datasets}")
-                    
-                    if datasets and len(datasets) > 0:
-                        dataset_name = f"{project_context['project_name']}_codebase"
-                        
-                        # Try to search for some basic info to show data exists
-                        try:
-                            sample_results = await cognee.search(
-                                query_type=SearchType.INSIGHTS,
-                                query_text="project overview files functions",
-                                datasets=[dataset_name]
-                            )
-                            
-                            if sample_results:
-                                data = [f"Dataset '{dataset_name}' contains {len(sample_results)} insights"] + sample_results[:3]
-                            else:
-                                data = [f"Dataset '{dataset_name}' exists but no insights found"]
-                        except Exception as search_e:
-                            logger.info(f"Search failed: {search_e}")
-                            data = [f"Dataset '{dataset_name}' exists in: {[str(ds) for ds in datasets]}"]
-                    else:
-                        data = None
-                        
-                except Exception as e:
-                    data = None  
-                    logger.warning(f"Error accessing cognee: {e}")
-                
-                if not data:
-                    result += "No data available in knowledge graph\n"
-                    result += "Use 'fuzzforge ingest' to ingest code, documentation, or other project files\n"
+                project_name = "Unknown"
+                datasets: List[str] = []
+                preview: List[str] = []
+
+                if self.project_config:
+                    context = self.project_config.get_project_context()
+                    project_name = context.get("project_name", project_name)
+
+                if self.memory_manager and getattr(self.memory_manager, "cognee_tools", None):
+                    data = await self.memory_manager.cognee_tools.list_datasets()
+                    if isinstance(data, dict):
+                        for entries in data.values():
+                            if isinstance(entries, list):
+                                for entry in entries:
+                                    if isinstance(entry, dict):
+                                        name = entry.get("name") or entry.get("dataset")
+                                        if name:
+                                            datasets.append(name)
+                    elif isinstance(data, list):
+                        for entry in data:
+                            if isinstance(entry, dict):
+                                name = entry.get("name")
+                                if name:
+                                    datasets.append(name)
                 else:
-                    # Extract datasets from data
-                    datasets = set()
-                    if isinstance(data, list):
-                        for item in data:
-                            if isinstance(item, dict) and 'dataset_name' in item:
-                                datasets.add(item['dataset_name'])
-                    
-                    if datasets:
-                        result += f"Available Datasets ({len(datasets)}):\n"
-                        for i, dataset in enumerate(sorted(datasets), 1):
-                            result += f"  {i}. {dataset}\n"
-                        result += "\n"
-                    
-                    result += f"Total data items: {len(data)}\n"
-                    
-                    # Show sample of available data
-                    result += "\nSample content:\n"
-                    for i, item in enumerate(data[:3], 1):
-                        if isinstance(item, dict):
-                            item_str = str(item)[:100] + "..." if len(str(item)) > 100 else str(item)
-                            result += f"  {i}. {item_str}\n"
-                        else:
-                            item_str = str(item)[:100] + "..." if len(str(item)) > 100 else str(item)
-                            result += f"  {i}. {item_str}\n"
-                
-                return result
-                
+                    cognee_service = await self._get_cognee_service()
+                    cfg = cognee_service.config
+                    datasets.append(cfg.get_project_dataset_name())
+
+                if datasets and self.memory_manager and getattr(self.memory_manager, "cognee_tools", None):
+                    dataset = datasets[0]
+                    sample = await self.memory_manager.search_knowledge_graph(
+                        query="project overview",
+                        search_type="INSIGHTS",
+                        dataset=dataset,
+                    )
+                    if isinstance(sample, dict):
+                        results = sample.get("results")
+                        if isinstance(results, list):
+                            for item in results[:3]:
+                                preview.append(json.dumps(item)[:120])
+
+                if not datasets:
+                    return (
+                        f"Available knowledge in project {project_name}:\n\n"
+                        "No data available in knowledge graph\n"
+                        "Use 'fuzzforge ingest' to ingest code, documentation, or other project files"
+                    )
+
+                lines = [f"Available knowledge in project {project_name}:\n\n"]
+                lines.append(f"Available Datasets ({len(datasets)}):")
+                for idx, name in enumerate(sorted(datasets), 1):
+                    lines.append(f"  {idx}. {name}")
+
+                if preview:
+                    lines.append("\nSample content:")
+                    for idx, snippet in enumerate(preview, 1):
+                        lines.append(f"  {idx}. {snippet}")
+
+                return "\n".join(lines)
+
             except Exception as e:
                 return f"Error listing knowledge: {e}"
         
