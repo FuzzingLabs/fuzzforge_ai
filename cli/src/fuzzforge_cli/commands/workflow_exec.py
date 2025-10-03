@@ -123,13 +123,7 @@ def execute_workflow_submission(
                     except ValueError as e:
                         console.print(f"❌ Invalid {param_type}: {e}", style="red")
 
-    # Validate volume mode
-    validate_volume_mode(volume_mode)
-    if volume_mode not in workflow_meta.supported_volume_modes:
-        raise ValidationError(
-            "volume mode", volume_mode,
-            f"one of: {', '.join(workflow_meta.supported_volume_modes)}"
-        )
+    # Note: volume_mode is no longer used (Temporal uses MinIO storage)
 
     # Show submission summary
     console.print(f"\n🎯 [bold]Executing workflow:[/bold]")
@@ -191,7 +185,6 @@ def execute_workflow_submission(
                 workflow_name=workflow,
                 target_path=target_path,
                 parameters=parameters,
-                volume_mode=volume_mode,
                 timeout=timeout
             )
             time.sleep(PROGRESS_STEP_DELAYS["uploading"])

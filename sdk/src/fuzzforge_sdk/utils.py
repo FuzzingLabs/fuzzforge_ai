@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 
-from .models import VolumeMount, ResourceLimits, WorkflowSubmission
+from .models import WorkflowSubmission
 from .exceptions import ValidationError
 
 
@@ -50,112 +50,19 @@ def validate_absolute_path(path: Union[str, Path]) -> Path:
     return path_obj
 
 
-def create_volume_mount(
-    host_path: Union[str, Path],
-    container_path: str,
-    mode: str = "ro"
-) -> VolumeMount:
-    """
-    Create a volume mount with path validation.
-
-    Args:
-        host_path: Host path to mount (must exist)
-        container_path: Container path for the mount
-        mode: Mount mode ("ro" or "rw")
-
-    Returns:
-        VolumeMount object
-
-    Raises:
-        ValidationError: If paths are invalid
-    """
-    # Validate host path exists and is absolute
-    validated_host_path = validate_absolute_path(host_path)
-
-    # Validate container path is absolute
-    if not container_path.startswith('/'):
-        raise ValidationError(f"Container path must be absolute: {container_path}")
-
-    # Validate mode
-    if mode not in ["ro", "rw"]:
-        raise ValidationError(f"Mode must be 'ro' or 'rw': {mode}")
-
-    return VolumeMount(
-        host_path=str(validated_host_path),
-        container_path=container_path,
-        mode=mode  # type: ignore
-    )
-
-
-def create_resource_limits(
-    cpu_limit: Optional[str] = None,
-    memory_limit: Optional[str] = None,
-    cpu_request: Optional[str] = None,
-    memory_request: Optional[str] = None
-) -> ResourceLimits:
-    """
-    Create resource limits with validation.
-
-    Args:
-        cpu_limit: CPU limit (e.g., "2", "500m")
-        memory_limit: Memory limit (e.g., "1Gi", "512Mi")
-        cpu_request: CPU request (guaranteed)
-        memory_request: Memory request (guaranteed)
-
-    Returns:
-        ResourceLimits object
-
-    Raises:
-        ValidationError: If resource specifications are invalid
-    """
-    # Basic validation for CPU limits
-    if cpu_limit is not None:
-        if not (cpu_limit.endswith('m') or cpu_limit.isdigit()):
-            raise ValidationError(f"Invalid CPU limit format: {cpu_limit}")
-
-    if cpu_request is not None:
-        if not (cpu_request.endswith('m') or cpu_request.isdigit()):
-            raise ValidationError(f"Invalid CPU request format: {cpu_request}")
-
-    # Basic validation for memory limits
-    memory_suffixes = ['Ki', 'Mi', 'Gi', 'Ti', 'K', 'M', 'G', 'T']
-
-    if memory_limit is not None:
-        if not any(memory_limit.endswith(suffix) for suffix in memory_suffixes):
-            if not memory_limit.isdigit():
-                raise ValidationError(f"Invalid memory limit format: {memory_limit}")
-
-    if memory_request is not None:
-        if not any(memory_request.endswith(suffix) for suffix in memory_suffixes):
-            if not memory_request.isdigit():
-                raise ValidationError(f"Invalid memory request format: {memory_request}")
-
-    return ResourceLimits(
-        cpu_limit=cpu_limit,
-        memory_limit=memory_limit,
-        cpu_request=cpu_request,
-        memory_request=memory_request
-    )
-
-
 def create_workflow_submission(
-    target_path: Union[str, Path],
-    volume_mode: str = "ro",
     parameters: Optional[Dict[str, Any]] = None,
-    timeout: Optional[int] = None,
-    resource_limits: Optional[ResourceLimits] = None,
-    additional_volumes: Optional[List[VolumeMount]] = None
+    timeout: Optional[int] = None
 ) -> WorkflowSubmission:
     """
-    Create a workflow submission with path validation.
+    Create a workflow submission.
+
+    Note: This function is deprecated. Use client.submit_workflow_with_upload() instead
+    which handles file uploads automatically.
 
     Args:
-        target_path: Path to analyze (must exist)
-        volume_mode: Mount mode for target path
         parameters: Workflow-specific parameters
         timeout: Execution timeout in seconds
-        resource_limits: Resource limits for the container
-        additional_volumes: Additional volume mounts
 
     Returns:
         WorkflowSubmission object
@@ -163,25 +70,14 @@ def create_workflow_submission(
     Raises:
         ValidationError: If parameters are invalid
     """
-    # Validate target path
-    validated_target_path = validate_absolute_path(target_path)
-
-    # Validate volume mode
-    if volume_mode not in ["ro", "rw"]:
-        raise ValidationError(f"Volume mode must be 'ro' or 'rw': {volume_mode}")
-
     # Validate timeout
     if timeout is not None:
         if timeout < 1 or timeout > 604800:  # Max 7 days
             raise ValidationError(f"Timeout must be between 1 and 604800 seconds: {timeout}")
 
     return WorkflowSubmission(
-        target_path=str(validated_target_path),
-        volume_mode=volume_mode,  # type: ignore
         parameters=parameters or {},
-        timeout=timeout,
-        resource_limits=resource_limits,
-        additional_volumes=additional_volumes or []
+        timeout=timeout
     )
 
 

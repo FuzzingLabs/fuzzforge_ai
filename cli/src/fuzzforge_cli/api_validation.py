@@ -29,7 +29,6 @@ class WorkflowMetadata(BaseModel):
     author: Optional[str] = None
     description: Optional[str] = None
     parameters: Dict[str, Any] = {}
-    supported_volume_modes: List[str] = ["ro", "rw"]
 
 
 class RunStatus(BaseModel):

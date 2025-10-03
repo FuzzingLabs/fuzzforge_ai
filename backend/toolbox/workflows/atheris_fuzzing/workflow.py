@@ -90,19 +90,19 @@ class AtherisFuzzingWorkflow:
             workflow.logger.info("Step 2: Running Atheris fuzzing")
 
             # Use defaults if parameters are None
-            max_iterations = max_iterations if max_iterations is not None else 100000
-            timeout_seconds = timeout_seconds if timeout_seconds is not None else 300
+            actual_max_iterations = max_iterations if max_iterations is not None else 100000
+            actual_timeout_seconds = timeout_seconds if timeout_seconds is not None else 300
 
             fuzz_config = {
                 "target_file": target_file,
-                "max_iterations": max_iterations,
-                "timeout_seconds": timeout_seconds
+                "max_iterations": actual_max_iterations,
+                "timeout_seconds": actual_timeout_seconds
             }
 
             fuzz_results = await workflow.execute_activity(
                 "fuzz_with_atheris",
                 args=[target_path, fuzz_config],
-                start_to_close_timeout=timedelta(seconds=timeout_seconds + 60),
+                start_to_close_timeout=timedelta(seconds=actual_timeout_seconds + 60),
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=2),
                     maximum_interval=timedelta(seconds=60),
