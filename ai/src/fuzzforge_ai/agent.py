@@ -15,8 +15,12 @@ The core agent that combines all components
 
 
 import os
+import threading
+import time
+import socket
+import asyncio
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from google.adk import Agent
 from google.adk.models.lite_llm import LiteLlm
 from .agent_card import get_fuzzforge_agent_card
@@ -43,11 +47,19 @@ class FuzzForgeAgent:
         model: str = None,
         cognee_url: str = None,
         port: int = 10100,
+        auto_start_server: Optional[bool] = None,
     ):
         """Initialize FuzzForge agent with configuration"""
         self.model = model or os.getenv('LITELLM_MODEL', 'gpt-4o-mini')
         self.cognee_url = cognee_url or os.getenv('COGNEE_MCP_URL')
-        self.port = port
+        self.port = int(os.getenv('FUZZFORGE_PORT', port))
+        self._auto_start_server = (
+            auto_start_server
+            if auto_start_server is not None
+            else os.getenv('FUZZFORGE_AUTO_A2A_SERVER', '1') not in {'0', 'false', 'False'}
+        )
+        self._uvicorn_server = None
+        self._a2a_server_thread: Optional[threading.Thread] = None
 
         # Initialize ADK Memory Service for conversational memory
         memory_type = os.getenv('MEMORY_SERVICE', 'inmemory')
@@ -75,6 +87,9 @@ class FuzzForgeAgent:
         
         # Create the ADK agent (for A2A server mode)
         self.adk_agent = self._create_adk_agent()
+
+        if self._auto_start_server:
+            self._ensure_a2a_server_running()
         
     def _create_adk_agent(self) -> Agent:
         """Create the ADK agent for A2A server mode"""
@@ -119,15 +134,85 @@ When responding to requests:
     
     async def cleanup(self):
         """Clean up resources"""
+        await self._stop_a2a_server()
         await self.executor.cleanup()
+
+    def _ensure_a2a_server_running(self):
+        """Start the A2A server in the background if it's not already running."""
+        if self._a2a_server_thread and self._a2a_server_thread.is_alive():
+            return
+
+        try:
+            from uvicorn import Config, Server
+            from .a2a_server import create_a2a_app as create_custom_a2a_app
+        except ImportError as exc:
+            if os.getenv('FUZZFORGE_DEBUG', '0') == '1':
+                print(f"[DEBUG] Unable to start A2A server automatically: {exc}")
+            return
+
+        app = create_custom_a2a_app(
+            self.adk_agent,
+            port=self.port,
+            executor=self.executor,
+        )
+
+        log_level = os.getenv('FUZZFORGE_UVICORN_LOG_LEVEL', 'error')
+        config = Config(app=app, host='127.0.0.1', port=self.port, log_level=log_level, loop='asyncio')
+        server = Server(config=config)
+        self._uvicorn_server = server
+
+        def _run_server():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async def _serve():
+                await server.serve()
+
+            try:
+                loop.run_until_complete(_serve())
+            finally:
+                loop.close()
+
+        thread = threading.Thread(target=_run_server, name='FuzzForgeA2AServer', daemon=True)
+        thread.start()
+        self._a2a_server_thread = thread
+
+        # Give the server a moment to bind to the port for downstream agents
+        for _ in range(50):
+            if server.should_exit:
+                break
+            try:
+                with socket.create_connection(('127.0.0.1', self.port), timeout=0.1):
+                    if os.getenv('FUZZFORGE_DEBUG', '0') == '1':
+                        print(f"[DEBUG] Auto-started A2A server on http://127.0.0.1:{self.port}")
+                    break
+            except OSError:
+                time.sleep(0.1)
+
+    async def _stop_a2a_server(self):
+        """Shut down the background A2A server if we started one."""
+        server = self._uvicorn_server
+        if server is None:
+            return
+
+        server.should_exit = True
+        if self._a2a_server_thread and self._a2a_server_thread.is_alive():
+            # Allow server loop to exit gracefully without blocking event loop
+            try:
+                await asyncio.wait_for(asyncio.to_thread(self._a2a_server_thread.join, 5), timeout=6)
+            except (asyncio.TimeoutError, RuntimeError):
+                pass
+
+        self._uvicorn_server = None
+        self._a2a_server_thread = None
 
 
 # Create a singleton instance for import
 _instance = None
 
-def get_fuzzforge_agent() -> FuzzForgeAgent:
+def get_fuzzforge_agent(auto_start_server: Optional[bool] = None) -> FuzzForgeAgent:
     """Get the singleton FuzzForge agent instance"""
     global _instance
     if _instance is None:
-        _instance = FuzzForgeAgent()
+        _instance = FuzzForgeAgent(auto_start_server=auto_start_server)
     return _instance

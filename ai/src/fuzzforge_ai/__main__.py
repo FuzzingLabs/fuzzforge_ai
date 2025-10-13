@@ -65,7 +65,7 @@ def create_a2a_app():
     port = int(os.getenv('FUZZFORGE_PORT', 10100))
     
     # Get the FuzzForge agent
-    fuzzforge = get_fuzzforge_agent()
+    fuzzforge = get_fuzzforge_agent(auto_start_server=False)
     
     # Print ASCII banner
     print("\033[95m")  # Purple color

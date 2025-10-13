@@ -16,7 +16,7 @@ import base64
 import time
 import uuid
 import json
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Optional
 from datetime import datetime
 import os
 import warnings
@@ -93,7 +93,8 @@ class FuzzForgeExecutor:
         self._background_tasks: set[asyncio.Task] = set()
         self.pending_runs: Dict[str, Dict[str, Any]] = {}
         self.session_metadata: Dict[str, Dict[str, Any]] = {}
-        self._artifact_cache_dir = Path(os.getenv('FUZZFORGE_ARTIFACT_DIR', Path.cwd() / '.fuzzforge' / 'artifacts'))
+        self._project_root = self._detect_project_root()
+        self._artifact_cache_dir = self._resolve_artifact_cache_dir()
         self._knowledge_integration = None
 
         # Initialize Cognee service if available
@@ -194,6 +195,38 @@ class FuzzForgeExecutor:
             if self.debug:
                 print(f"[DEBUG] Auto-registration error for {url}: {e}")
     
+    def _detect_project_root(self) -> Optional[Path]:
+        """Locate the active FuzzForge project root directory if available."""
+        env_root = os.getenv('FUZZFORGE_PROJECT_DIR')
+        if env_root:
+            candidate = Path(env_root).expanduser().resolve()
+            if candidate.joinpath('.fuzzforge').is_dir():
+                return candidate
+
+        try:
+            config = ProjectConfigManager()
+            return config.config_path.parent.resolve()
+        except Exception:
+            pass
+
+        current = Path.cwd().resolve()
+        for path in (current,) + tuple(current.parents):
+            if path.joinpath('.fuzzforge').is_dir():
+                return path
+        return None
+
+    def _resolve_artifact_cache_dir(self) -> Path:
+        """Determine the artifact cache directory, prioritizing project context."""
+        env_dir = os.getenv('FUZZFORGE_ARTIFACT_DIR')
+        if env_dir:
+            return Path(env_dir).expanduser().resolve()
+
+        project_root = self._project_root
+        if project_root:
+            return (project_root / '.fuzzforge' / 'artifacts').resolve()
+
+        return (Path.cwd() / '.fuzzforge' / 'artifacts').resolve()
+
     def _create_artifact_service(self):
         """Create artifact service based on configuration"""
         artifact_storage = os.getenv('ARTIFACT_STORAGE', 'inmemory')
@@ -787,6 +820,39 @@ class FuzzForgeExecutor:
             return await self.delegate_file_to_agent(agent_name, file_path, note, session=session, context_id=context_id)
 
         tools.append(FunctionTool(send_file_to_agent))
+
+        async def send_code_snippet_to_agent(
+            agent_name: str,
+            code: str,
+            filename: str = "",
+            note: str = "",
+            tool_context: ToolContext | None = None,
+        ) -> str:
+            """Create an artifact from raw code and send it to a registered agent."""
+            if not agent_name:
+                return "agent_name is required"
+            if not code or not code.strip():
+                return "code is required"
+
+            session = None
+            context_id = None
+            if tool_context and getattr(tool_context, "invocation_context", None):
+                invocation = tool_context.invocation_context
+                session = invocation.session
+                context_id = self.session_lookup.get(getattr(session, 'id', None))
+
+            target_filename = filename or "snippet.rs"
+            snippet_note = note or "Please analyse the provided code snippet."
+            return await self.delegate_code_snippet_to_agent(
+                agent_name,
+                target_filename,
+                code,
+                note=snippet_note,
+                session=session,
+                context_id=context_id,
+            )
+
+        tools.append(FunctionTool(send_code_snippet_to_agent))
 
         if self.debug:
             print("[DEBUG] Added Cognee project integration tools")
@@ -1886,11 +1952,14 @@ Be concise and intelligent in your responses."""
 
     async def create_project_file_artifact_api(self, file_path: str) -> Dict[str, Any]:
         try:
-            config = ProjectConfigManager()
+            config = ProjectConfigManager(self._project_root) if self._project_root else ProjectConfigManager()
             if not config.is_initialized():
                 return {"error": "Project not initialized. Run 'fuzzforge init' first."}
 
-            project_root = config.config_path.parent.resolve()
+            project_root = self._project_root or config.config_path.parent.resolve()
+            if self._project_root is None:
+                self._project_root = project_root
+                self._artifact_cache_dir = self._resolve_artifact_cache_dir()
             requested_file = (project_root / file_path).resolve()
 
             try:
@@ -2100,6 +2169,45 @@ Be concise and intelligent in your responses."""
         response_text = response if isinstance(response, str) else str(response)
         await self._append_external_event(session, agent_name, response_text)
         return response_text
+
+    async def delegate_code_snippet_to_agent(
+        self,
+        agent_name: str,
+        filename: str,
+        code: str,
+        note: str = "",
+        session: Any = None,
+        context_id: str | None = None,
+    ) -> str:
+        try:
+            if not code or not code.strip():
+                return "No code snippet provided for delegation."
+
+            cache_dir = self._prepare_artifact_cache_dir()
+            artifact_id = uuid.uuid4().hex
+
+            # Normalise filename and ensure extension
+            safe_filename = (filename or "snippet.rs").strip()
+            if not safe_filename:
+                safe_filename = "snippet.rs"
+            if "." not in safe_filename:
+                safe_filename = f"{safe_filename}.rs"
+
+            snippet_dir = cache_dir / artifact_id
+            snippet_dir.mkdir(parents=True, exist_ok=True)
+            file_path = snippet_dir / safe_filename
+            file_path.write_text(code, encoding="utf-8")
+
+            message_note = note or f"Please analyse the code snippet {safe_filename}."
+            return await self.delegate_file_to_agent(
+                agent_name,
+                str(file_path),
+                message_note,
+                session=session,
+                context_id=context_id,
+            )
+        except Exception as exc:
+            return f"Failed to delegate code snippet: {exc}"
 
     async def delegate_file_to_agent(
         self,
