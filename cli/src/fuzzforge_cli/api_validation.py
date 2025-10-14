@@ -14,10 +14,10 @@ API response validation and graceful degradation utilities.
 
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ValidationError as PydanticValidationError
 
-from .exceptions import ValidationError, APIConnectionError
+from .exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,6 @@ class WorkflowMetadata(BaseModel):
     author: Optional[str] = None
     description: Optional[str] = None
     parameters: Dict[str, Any] = {}
-    supported_volume_modes: List[str] = ["ro", "rw"]
 
 
 class RunStatus(BaseModel):

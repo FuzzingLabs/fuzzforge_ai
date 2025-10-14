@@ -15,7 +15,7 @@ Defines what FuzzForge can do and how others can discover it
 
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 
 @dataclass
 class AgentSkill:

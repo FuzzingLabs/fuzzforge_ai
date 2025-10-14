@@ -23,7 +23,7 @@ import subprocess
 import platform
 import time
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 
 class Colors:

@@ -164,7 +164,7 @@ fuzzforge finding <run-id>
             console.print("📚 Created README.md")
 
         console.print("\n✅ FuzzForge project initialized successfully!", style="green")
-        console.print(f"\n🎯 Next steps:")
+        console.print("\n🎯 Next steps:")
         console.print("   • ff workflows - See available workflows")
         console.print("   • ff status - Check API connectivity")
         console.print("   • ff workflow <workflow> <path> - Start your first analysis")

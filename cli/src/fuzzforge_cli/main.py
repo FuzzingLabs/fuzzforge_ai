@@ -117,7 +117,6 @@ def config(
     """
     ⚙️  Manage configuration (show all, get, or set values)
     """
-    from .commands import config as config_cmd
 
     if key is None:
         # No arguments: show all config
@@ -205,10 +204,29 @@ def run_workflow(
     live: bool = typer.Option(
         False, "--live", "-l",
         help="Start live monitoring after execution (useful for fuzzing workflows)"
+    ),
+    auto_start: Optional[bool] = typer.Option(
+        None, "--auto-start/--no-auto-start",
+        help="Automatically start required worker if not running (default: from config)"
+    ),
+    auto_stop: Optional[bool] = typer.Option(
+        None, "--auto-stop/--no-auto-stop",
+        help="Automatically stop worker after execution completes (default: from config)"
+    ),
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on",
+        help="Fail build if findings match SARIF level (error,warning,note,info,all,none). Use with --wait"
+    ),
+    export_sarif: Optional[str] = typer.Option(
+        None, "--export-sarif",
+        help="Export SARIF results to file after completion. Use with --wait"
     )
 ):
     """
     🚀 Execute a security testing workflow
+
+    Use --fail-on with --wait to fail CI builds based on finding severity.
+    Use --export-sarif with --wait to export SARIF findings to a file.
     """
     from .commands.workflow_exec import execute_workflow
 
@@ -221,7 +239,11 @@ def run_workflow(
         timeout=timeout,
         interactive=interactive,
         wait=wait,
-        live=live
+        live=live,
+        auto_start=auto_start,
+        auto_stop=auto_stop,
+        fail_on=fail_on,
+        export_sarif=export_sarif
     )
 
 @workflow_app.callback()
@@ -357,50 +379,13 @@ app.add_typer(ingest.app, name="ingest", help="🧠 Ingest knowledge into AI")
 
 # Help and utility commands
 @app.command()
-def examples():
-    """
-    📚 Show usage examples
-    """
-    examples_text = """
-[bold cyan]FuzzForge CLI Examples[/bold cyan]
-
-[bold]Getting Started:[/bold]
-  ff init                           # Initialize a project
-  ff workflows                      # List available workflows
-  ff workflow info afl-fuzzing      # Get workflow details
-
-[bold]Execute Workflows:[/bold]
-  ff workflow afl-fuzzing ./target  # Run fuzzing on target
-  ff workflow afl-fuzzing . --live  # Run with live monitoring
-  ff workflow scan-c ./src timeout=300 threads=4  # With parameters
-
-[bold]Monitor Execution:[/bold]
-  ff status                         # Check latest execution
-  ff workflow status                # Same as above
-  ff monitor                        # Live monitoring dashboard
-  ff workflow history               # Show past executions
-
-[bold]Review Findings:[/bold]
-  ff findings                       # List all findings
-  ff finding                        # Show latest finding
-  ff finding export --format sarif  # Export findings
-
-[bold]AI Features:[/bold]
-  ff ai chat                        # Interactive AI chat
-  ff ai suggest ./src               # Get workflow suggestions
-  ff finding analyze                # AI analysis of latest finding
-"""
-    console.print(examples_text)
-
-
-@app.command()
 def version():
     """
     📦 Show version information
     """
     from . import __version__
     console.print(f"FuzzForge CLI v{__version__}")
-    console.print(f"Short command: ff")
+    console.print("Short command: ff")
 
 
 @app.callback()
@@ -418,7 +403,6 @@ def main_callback(
     • ff init                        - Initialize a new project
     • ff workflows                   - See available workflows
     • ff workflow <name> <target>    - Execute a workflow
-    • ff examples                    - Show usage examples
     """
     if version:
         from . import __version__
@@ -468,7 +452,7 @@ def main():
                     'workflows', 'workflow',
                     'findings', 'finding',
                     'monitor', 'ai', 'ingest',
-                    'examples', 'version'
+                    'version'
                 ]
 
                 if main_cmd not in valid_commands:

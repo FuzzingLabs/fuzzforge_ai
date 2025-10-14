@@ -1,8 +1,8 @@
 name: security_assessment
 version: "2.0.0"
+vertical: rust
 description: "Comprehensive security assessment workflow that scans files, analyzes code for vulnerabilities, and generates SARIF reports"
 author: "FuzzForge Team"
-category: "comprehensive"
 tags:
   - "security"
   - "scanner"
@@ -11,28 +11,14 @@ tags:
   - "sarif"
   - "comprehensive"
 
-supported_volume_modes:
-  - "ro"
-  - "rw"
-
-default_volume_mode: "ro"
-default_target_path: "/workspace"
-
-requirements:
-  tools:
-    - "file_scanner"
-    - "security_analyzer"
-    - "sarif_reporter"
-  resources:
-    memory: "512Mi"
-    cpu: "500m"
-    timeout: 1800
-
-has_docker: true
+# Workspace isolation mode (system-level configuration)
+# - "isolated" (default): Each workflow run gets its own isolated workspace (safe for concurrent fuzzing)
+# - "shared": All runs share the same workspace (for read-only analysis workflows)
+# - "copy-on-write": Download once, copy for each run (balances performance and isolation)
+# Using "shared" mode for read-only security analysis (no file modifications)
+workspace_isolation: "shared"
 
 default_parameters:
-  target_path: "/workspace"
-  volume_mode: "ro"
   scanner_config: {}
   analyzer_config: {}
   reporter_config: {}
@@ -40,15 +26,6 @@ default_parameters:
 parameters:
   type: object
   properties:
-    target_path:
-      type: string
-      default: "/workspace"
-      description: "Path to analyze"
-    volume_mode:
-      type: string
-      enum: ["ro", "rw"]
-      default: "ro"
-      description: "Volume mount mode"
     scanner_config:
       type: object
       description: "File scanner configuration"

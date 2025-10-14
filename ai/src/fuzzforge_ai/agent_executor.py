@@ -12,7 +12,6 @@
 
 
 import asyncio
-import base64
 import time
 import uuid
 import json
@@ -392,7 +391,7 @@ class FuzzForgeExecutor:
                     user_email = f"project_{config.get_project_context()['project_id']}@fuzzforge.example"
                     user = await get_user(user_email)
                     cognee.set_user(user)
-                except Exception as e:
+                except Exception:
                     pass  # User context not critical
                 
                 # Use cognee search directly for maximum flexibility
@@ -583,7 +582,6 @@ class FuzzForgeExecutor:
                 pattern: Glob pattern (e.g. '*.py', '**/*.js', '') 
             """
             try:
-                from pathlib import Path
 
                 # Get project root from config
                 config = ProjectConfigManager()
@@ -648,7 +646,6 @@ class FuzzForgeExecutor:
                 max_lines: Maximum lines to read (0 for all, default 200 for large files)
             """
             try:
-                from pathlib import Path
 
                 # Get project root from config
                 config = ProjectConfigManager()
@@ -711,7 +708,6 @@ class FuzzForgeExecutor:
             """
             try:
                 import re
-                from pathlib import Path
 
                 # Get project root from config
                 config = ProjectConfigManager()
@@ -757,7 +753,7 @@ class FuzzForgeExecutor:
                     result = f"Found '{search_pattern}' in {len(matches)} locations (searched {files_searched} files):\n"
                     result += "\n".join(matches[:50])
                     if len(matches) >= 50:
-                        result += f"\n... (showing first 50 matches)"
+                        result += "\n... (showing first 50 matches)"
                     return result
                 else:
                     return f"No matches found for '{search_pattern}' in {files_searched} files matching '{file_pattern}'"
@@ -1088,7 +1084,7 @@ class FuzzForgeExecutor:
         
     def _build_instruction(self) -> str:
         """Build the agent's instruction prompt"""
-        instruction = f"""You are FuzzForge, an intelligent A2A orchestrator with dual memory systems.
+        instruction = """You are FuzzForge, an intelligent A2A orchestrator with dual memory systems.
 
 ## Your Core Responsibilities:
 

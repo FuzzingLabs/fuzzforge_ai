@@ -24,27 +24,25 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.prompt import Prompt, Confirm
-from rich.live import Live
 from rich import box
 
 from ..config import get_project_config, FuzzForgeConfig
 from ..database import get_project_db, ensure_project_db, RunRecord
 from ..exceptions import (
     handle_error, retry_on_network_error, safe_json_load, require_project,
-    APIConnectionError, ValidationError, DatabaseError, FileOperationError
+    ValidationError, DatabaseError
 )
 from ..validation import (
     validate_run_id, validate_workflow_name, validate_target_path,
-    validate_volume_mode, validate_parameters, validate_timeout
+    validate_parameters, validate_timeout
 )
-from ..progress import progress_manager, spinner, step_progress
-from ..completion import WorkflowNameComplete, TargetPathComplete, VolumeModetComplete
+from ..progress import step_progress
 from ..constants import (
     STATUS_EMOJIS, MAX_RUN_ID_DISPLAY_LENGTH, DEFAULT_VOLUME_MODE,
     PROGRESS_STEP_DELAYS, MAX_RETRIES, RETRY_DELAY, POLL_INTERVAL
 )
+from ..worker_manager import WorkerManager
 from fuzzforge_sdk import FuzzForgeClient, WorkflowSubmission
 
 console = Console()
@@ -63,6 +61,47 @@ def status_emoji(status: str) -> str:
     return STATUS_EMOJIS.get(status.lower(), STATUS_EMOJIS["unknown"])
 
 
+def should_fail_build(sarif_data: Dict[str, Any], fail_on: str) -> bool:
+    """
+    Check if findings warrant build failure based on SARIF severity levels.
+
+    Args:
+        sarif_data: SARIF format findings data
+        fail_on: Comma-separated SARIF levels (error,warning,note,info,all,none)
+
+    Returns:
+        True if build should fail, False otherwise
+    """
+    if fail_on == "none":
+        return False
+
+    # Parse fail_on parameter - accept SARIF levels
+    if fail_on == "all":
+        check_levels = {"error", "warning", "note", "info"}
+    else:
+        check_levels = {s.strip().lower() for s in fail_on.split(",")}
+
+    # Validate levels
+    valid_levels = {"error", "warning", "note", "info", "none"}
+    invalid = check_levels - valid_levels
+    if invalid:
+        console.print(f"⚠️  Invalid SARIF levels: {', '.join(invalid)}", style="yellow")
+        console.print("Valid levels: error, warning, note, info, all, none")
+
+    # Check SARIF results
+    runs = sarif_data.get("runs", [])
+    if not runs:
+        return False
+
+    results = runs[0].get("results", [])
+    for result in results:
+        level = result.get("level", "note")  # SARIF default is "note"
+        if level in check_levels:
+            return True
+
+    return False
+
+
 def parse_inline_parameters(params: List[str]) -> Dict[str, Any]:
     """Parse inline key=value parameters using improved validation"""
     return validate_parameters(params)
@@ -77,17 +116,15 @@ def execute_workflow_submission(
     timeout: Optional[int],
     interactive: bool
 ) -> Any:
-    """Handle the workflow submission process"""
+    """Handle the workflow submission process with file upload"""
     # Get workflow metadata for parameter validation
     console.print(f"🔧 Getting workflow information for: {workflow}")
     workflow_meta = client.get_workflow_metadata(workflow)
-    param_response = client.get_workflow_parameters(workflow)
 
     # Interactive parameter input
     if interactive and workflow_meta.parameters.get("properties"):
         properties = workflow_meta.parameters.get("properties", {})
         required_params = set(workflow_meta.parameters.get("required", []))
-        defaults = param_response.defaults
 
         missing_required = required_params - set(parameters.keys())
 
@@ -123,24 +160,10 @@ def execute_workflow_submission(
                     except ValueError as e:
                         console.print(f"❌ Invalid {param_type}: {e}", style="red")
 
-    # Validate volume mode
-    validate_volume_mode(volume_mode)
-    if volume_mode not in workflow_meta.supported_volume_modes:
-        raise ValidationError(
-            "volume mode", volume_mode,
-            f"one of: {', '.join(workflow_meta.supported_volume_modes)}"
-        )
-
-    # Create submission
-    submission = WorkflowSubmission(
-        target_path=target_path,
-        volume_mode=volume_mode,
-        parameters=parameters,
-        timeout=timeout
-    )
+    # Note: volume_mode is no longer used (Temporal uses MinIO storage)
 
     # Show submission summary
-    console.print(f"\n🎯 [bold]Executing workflow:[/bold]")
+    console.print("\n🎯 [bold]Executing workflow:[/bold]")
     console.print(f"   Workflow: {workflow}")
     console.print(f"   Target: {target_path}")
     console.print(f"   Volume Mode: {volume_mode}")
@@ -148,6 +171,22 @@ def execute_workflow_submission(
         console.print(f"   Parameters: {len(parameters)} provided")
     if timeout:
         console.print(f"   Timeout: {timeout}s")
+
+    # Check if target path exists locally
+    target_path_obj = Path(target_path)
+    use_upload = target_path_obj.exists()
+
+    if use_upload:
+        # Show file/directory info
+        if target_path_obj.is_dir():
+            num_files = sum(1 for _ in target_path_obj.rglob("*") if _.is_file())
+            console.print(f"   Upload: Directory with {num_files} files")
+        else:
+            size_mb = target_path_obj.stat().st_size / (1024 * 1024)
+            console.print(f"   Upload: File ({size_mb:.2f} MB)")
+    else:
+        console.print("   [yellow]⚠️  Warning: Target path does not exist locally[/yellow]")
+        console.print("   [yellow]   Attempting to use path-based submission (backend must have access)[/yellow]")
 
     # Only ask for confirmation in interactive mode
     if interactive:
@@ -160,32 +199,74 @@ def execute_workflow_submission(
     # Submit the workflow with enhanced progress
     console.print(f"\n🚀 Executing workflow: [bold yellow]{workflow}[/bold yellow]")
 
-    steps = [
-        "Validating workflow configuration",
-        "Connecting to FuzzForge API",
-        "Uploading parameters and settings",
-        "Creating workflow deployment",
-        "Initializing execution environment"
-    ]
+    if use_upload:
+        # Use new upload-based submission
+        steps = [
+            "Validating workflow configuration",
+            "Creating tarball (if directory)",
+            "Uploading target to backend",
+            "Starting workflow execution",
+            "Initializing execution environment"
+        ]
 
-    with step_progress(steps, f"Executing {workflow}") as progress:
-        progress.next_step()  # Validating
-        time.sleep(PROGRESS_STEP_DELAYS["validating"])
+        with step_progress(steps, f"Executing {workflow}") as progress:
+            progress.next_step()  # Validating
+            time.sleep(PROGRESS_STEP_DELAYS["validating"])
 
-        progress.next_step()  # Connecting
-        time.sleep(PROGRESS_STEP_DELAYS["connecting"])
+            progress.next_step()  # Creating tarball
+            time.sleep(PROGRESS_STEP_DELAYS["connecting"])
 
-        progress.next_step()  # Uploading
-        response = client.submit_workflow(workflow, submission)
-        time.sleep(PROGRESS_STEP_DELAYS["uploading"])
+            progress.next_step()  # Uploading
+            # Use the new upload method
+            response = client.submit_workflow_with_upload(
+                workflow_name=workflow,
+                target_path=target_path,
+                parameters=parameters,
+                timeout=timeout
+            )
+            time.sleep(PROGRESS_STEP_DELAYS["uploading"])
 
-        progress.next_step()  # Creating deployment
-        time.sleep(PROGRESS_STEP_DELAYS["creating"])
+            progress.next_step()  # Starting
+            time.sleep(PROGRESS_STEP_DELAYS["creating"])
 
-        progress.next_step()  # Initializing
-        time.sleep(PROGRESS_STEP_DELAYS["initializing"])
+            progress.next_step()  # Initializing
+            time.sleep(PROGRESS_STEP_DELAYS["initializing"])
 
-        progress.complete(f"Workflow started successfully!")
+            progress.complete("Workflow started successfully!")
+    else:
+        # Fall back to path-based submission (for backward compatibility)
+        steps = [
+            "Validating workflow configuration",
+            "Connecting to FuzzForge API",
+            "Submitting workflow parameters",
+            "Creating workflow deployment",
+            "Initializing execution environment"
+        ]
+
+        with step_progress(steps, f"Executing {workflow}") as progress:
+            progress.next_step()  # Validating
+            time.sleep(PROGRESS_STEP_DELAYS["validating"])
+
+            progress.next_step()  # Connecting
+            time.sleep(PROGRESS_STEP_DELAYS["connecting"])
+
+            progress.next_step()  # Submitting
+            submission = WorkflowSubmission(
+                target_path=target_path,
+                volume_mode=volume_mode,
+                parameters=parameters,
+                timeout=timeout
+            )
+            response = client.submit_workflow(workflow, submission)
+            time.sleep(PROGRESS_STEP_DELAYS["uploading"])
+
+            progress.next_step()  # Creating deployment
+            time.sleep(PROGRESS_STEP_DELAYS["creating"])
+
+            progress.next_step()  # Initializing
+            time.sleep(PROGRESS_STEP_DELAYS["initializing"])
+
+            progress.complete("Workflow started successfully!")
 
     return response
 
@@ -219,6 +300,22 @@ def execute_workflow(
     live: bool = typer.Option(
         False, "--live", "-l",
         help="Start live monitoring after execution (useful for fuzzing workflows)"
+    ),
+    auto_start: Optional[bool] = typer.Option(
+        None, "--auto-start/--no-auto-start",
+        help="Automatically start required worker if not running (default: from config)"
+    ),
+    auto_stop: Optional[bool] = typer.Option(
+        None, "--auto-stop/--no-auto-stop",
+        help="Automatically stop worker after execution completes (default: from config)"
+    ),
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on",
+        help="Fail build if findings match severity (critical,high,medium,low,all,none). Use with --wait"
+    ),
+    export_sarif: Optional[str] = typer.Option(
+        None, "--export-sarif",
+        help="Export SARIF results to file after completion. Use with --wait"
     )
 ):
     """
@@ -226,6 +323,8 @@ def execute_workflow(
 
     Use --live for fuzzing workflows to see real-time progress.
     Use --wait to wait for completion without live dashboard.
+    Use --fail-on with --wait to fail CI builds based on finding severity.
+    Use --export-sarif with --wait to export SARIF findings to a file.
     """
     try:
         # Validate inputs
@@ -261,14 +360,60 @@ def execute_workflow(
         except Exception as e:
             handle_error(e, "parsing parameters")
 
+    # Get config for worker management settings
+    config = get_project_config() or FuzzForgeConfig()
+    should_auto_start = auto_start if auto_start is not None else config.workers.auto_start_workers
+    should_auto_stop = auto_stop if auto_stop is not None else config.workers.auto_stop_workers
+
+    worker_container = None  # Track for cleanup
+    worker_mgr = None
+    wait_completed = False  # Track if wait completed successfully
+
     try:
         with get_client() as client:
+            # Get worker information for this workflow
+            try:
+                console.print(f"🔍 Checking worker requirements for: {workflow}")
+                worker_info = client.get_workflow_worker_info(workflow)
+
+                # Initialize worker manager
+                compose_file = config.workers.docker_compose_file
+                worker_mgr = WorkerManager(
+                    compose_file=Path(compose_file) if compose_file else None,
+                    startup_timeout=config.workers.worker_startup_timeout
+                )
+
+                # Ensure worker is running
+                worker_container = worker_info["worker_container"]
+                if not worker_mgr.ensure_worker_running(worker_info, auto_start=should_auto_start):
+                    console.print(
+                        f"❌ Worker not available: {worker_info['vertical']}",
+                        style="red"
+                    )
+                    console.print(
+                        f"💡 Start the worker manually: docker-compose start {worker_container}"
+                    )
+                    raise typer.Exit(1)
+
+            except typer.Exit:
+                raise  # Re-raise Exit to preserve exit code
+            except Exception as e:
+                # If we can't get worker info, warn but continue (might be old backend)
+                console.print(
+                    f"⚠️  Could not check worker requirements: {e}",
+                    style="yellow"
+                )
+                console.print(
+                    "   Continuing without worker management...",
+                    style="yellow"
+                )
+
             response = execute_workflow_submission(
                 client, workflow, target_path, parameters,
                 volume_mode, timeout, interactive
             )
 
-            console.print(f"✅ Workflow execution started!", style="green")
+            console.print("✅ Workflow execution started!", style="green")
             console.print(f"   Execution ID: [bold cyan]{response.run_id}[/bold cyan]")
             console.print(f"   Status: {status_emoji(response.status)} {response.status}")
 
@@ -288,22 +433,22 @@ def execute_workflow(
                 # Don't fail the whole operation if database save fails
                 console.print(f"⚠️  Failed to save execution to database: {e}", style="yellow")
 
-            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor {response.run_id}[/bold cyan]")
+            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor stats {response.run_id}[/bold cyan]")
             console.print(f"💡 Check status: [bold cyan]fuzzforge workflow status {response.run_id}[/bold cyan]")
 
             # Suggest --live for fuzzing workflows
             if not live and not wait and "fuzzing" in workflow.lower():
-                console.print(f"💡 Next time try: [bold cyan]fuzzforge workflow {workflow} {target_path} --live[/bold cyan] for real-time fuzzing dashboard", style="dim")
+                console.print(f"💡 Next time try: [bold cyan]fuzzforge workflow {workflow} {target_path} --live[/bold cyan] for real-time monitoring", style="dim")
 
             # Start live monitoring if requested
             if live:
                 # Check if this is a fuzzing workflow to show appropriate messaging
                 is_fuzzing = "fuzzing" in workflow.lower()
                 if is_fuzzing:
-                    console.print(f"\n📺 Starting live fuzzing dashboard...")
+                    console.print("\n📺 Starting live fuzzing monitor...")
                     console.print("💡 You'll see real-time crash discovery, execution stats, and coverage data.")
                 else:
-                    console.print(f"\n📺 Starting live monitoring dashboard...")
+                    console.print("\n📺 Starting live monitoring...")
 
                 console.print("Press Ctrl+C to stop monitoring (execution continues in background).\n")
 
@@ -312,14 +457,14 @@ def execute_workflow(
                     # Import monitor command and run it
                     live_monitor(response.run_id, refresh=3)
                 except KeyboardInterrupt:
-                    console.print(f"\n⏹️  Live monitoring stopped (execution continues in background)", style="yellow")
+                    console.print("\n⏹️  Live monitoring stopped (execution continues in background)", style="yellow")
                 except Exception as e:
                     console.print(f"⚠️  Failed to start live monitoring: {e}", style="yellow")
                     console.print(f"💡 You can still monitor manually: [bold cyan]fuzzforge monitor {response.run_id}[/bold cyan]")
 
             # Wait for completion if requested
             elif wait:
-                console.print(f"\n⏳ Waiting for execution to complete...")
+                console.print("\n⏳ Waiting for execution to complete...")
                 try:
                     final_status = client.wait_for_completion(response.run_id, poll_interval=POLL_INTERVAL)
 
@@ -334,17 +479,63 @@ def execute_workflow(
                         console.print(f"⚠️  Failed to update database: {e}", style="yellow")
 
                     console.print(f"🏁 Execution completed with status: {status_emoji(final_status.status)} {final_status.status}")
+                    wait_completed = True  # Mark wait as completed
 
                     if final_status.is_completed:
-                        console.print(f"💡 View findings: [bold cyan]fuzzforge findings {response.run_id}[/bold cyan]")
+                        # Export SARIF if requested
+                        if export_sarif:
+                            try:
+                                console.print("\n📤 Exporting SARIF results...")
+                                findings = client.get_run_findings(response.run_id)
+                                output_path = Path(export_sarif)
+                                with open(output_path, 'w') as f:
+                                    json.dump(findings.sarif, f, indent=2)
+                                console.print(f"✅ SARIF exported to: [bold cyan]{output_path}[/bold cyan]")
+                            except Exception as e:
+                                console.print(f"⚠️  Failed to export SARIF: {e}", style="yellow")
+
+                        # Check if build should fail based on findings
+                        if fail_on:
+                            try:
+                                console.print(f"\n🔍 Checking findings against severity threshold: {fail_on}")
+                                findings = client.get_run_findings(response.run_id)
+                                if should_fail_build(findings.sarif, fail_on):
+                                    console.print("❌ [bold red]Build failed: Found blocking security issues[/bold red]")
+                                    console.print(f"💡 View details: [bold cyan]fuzzforge finding {response.run_id}[/bold cyan]")
+                                    raise typer.Exit(1)
+                                else:
+                                    console.print("✅ [bold green]No blocking security issues found[/bold green]")
+                            except typer.Exit:
+                                raise  # Re-raise Exit to preserve exit code
+                            except Exception as e:
+                                console.print(f"⚠️  Failed to check findings: {e}", style="yellow")
+
+                        if not fail_on and not export_sarif:
+                            console.print(f"💡 View findings: [bold cyan]fuzzforge findings {response.run_id}[/bold cyan]")
 
                 except KeyboardInterrupt:
-                    console.print(f"\n⏹️  Monitoring cancelled (execution continues in background)", style="yellow")
+                    console.print("\n⏹️  Monitoring cancelled (execution continues in background)", style="yellow")
+                except typer.Exit:
+                    raise  # Re-raise Exit to preserve exit code
                 except Exception as e:
                     handle_error(e, "waiting for completion")
 
+    except typer.Exit:
+        raise  # Re-raise Exit to preserve exit code
     except Exception as e:
         handle_error(e, "executing workflow")
+    finally:
+        # Stop worker if auto-stop is enabled and wait completed
+        if should_auto_stop and worker_container and worker_mgr and wait_completed:
+            try:
+                console.print("\n🛑 Stopping worker (auto-stop enabled)...")
+                if worker_mgr.stop_worker(worker_container):
+                    console.print(f"✅ Worker stopped: {worker_container}")
+            except Exception as e:
+                console.print(
+                    f"⚠️  Failed to stop worker: {e}",
+                    style="yellow"
+                )
 
 
 @app.command("status")
@@ -409,7 +600,7 @@ def workflow_status(
         console.print(
             Panel.fit(
                 status_table,
-                title=f"📊 Status Information",
+                title="📊 Status Information",
                 box=box.ROUNDED
             )
         )
@@ -479,7 +670,7 @@ def workflow_history(
         console.print()
         console.print(table)
 
-        console.print(f"\n💡 Use [bold cyan]fuzzforge workflow status <execution-id>[/bold cyan] for detailed status")
+        console.print("\n💡 Use [bold cyan]fuzzforge workflow status <execution-id>[/bold cyan] for detailed status")
 
     except Exception as e:
         handle_error(e, "listing execution history")
@@ -527,7 +718,7 @@ def retry_workflow(
 
         # Modify parameters if requested
         if modify_params and parameters:
-            console.print(f"\n📝 [bold]Current parameters:[/bold]")
+            console.print("\n📝 [bold]Current parameters:[/bold]")
             for key, value in parameters.items():
                 new_value = Prompt.ask(
                     f"{key}",
@@ -559,7 +750,7 @@ def retry_workflow(
 
             response = client.submit_workflow(original_run.workflow, submission)
 
-            console.print(f"\n✅ Retry submitted successfully!", style="green")
+            console.print("\n✅ Retry submitted successfully!", style="green")
             console.print(f"   New Execution ID: [bold cyan]{response.run_id}[/bold cyan]")
             console.print(f"   Status: {status_emoji(response.status)} {response.status}")
 
@@ -578,7 +769,7 @@ def retry_workflow(
             except Exception as e:
                 console.print(f"⚠️  Failed to save execution to database: {e}", style="yellow")
 
-            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor {response.run_id}[/bold cyan]")
+            console.print(f"\n💡 Monitor progress: [bold cyan]fuzzforge monitor stats {response.run_id}[/bold cyan]")
 
     except Exception as e:
         handle_error(e, "retrying workflow")

@@ -19,9 +19,11 @@ including real-time monitoring capabilities for fuzzing workflows.
 import asyncio
 import json
 import logging
-from typing import Dict, Any, List, Optional, AsyncIterator, Iterator, Union
+import tarfile
+import tempfile
+from pathlib import Path
+from typing import Dict, Any, List, Optional, AsyncIterator, Iterator, Union, Callable
 from urllib.parse import urljoin, urlparse
-import warnings
 
 import httpx
 import websockets
@@ -213,6 +215,56 @@ class FuzzForgeClient:
         response = await self._async_client.get(url)
         return await self._ahandle_response(response)
 
+    def get_workflow_worker_info(self, workflow_name: str) -> Dict[str, Any]:
+        """
+        Get worker information for a workflow.
+
+        Returns details about which worker is required to execute this workflow,
+        including container name, task queue, and vertical.
+
+        Args:
+            workflow_name: Name of the workflow
+
+        Returns:
+            Dictionary with worker info including:
+                - workflow: Workflow name
+                - vertical: Worker vertical (e.g., "ossfuzz", "python", "rust")
+                - worker_container: Docker container name
+                - task_queue: Temporal task queue name
+                - required: Whether worker is required (always True)
+
+        Raises:
+            FuzzForgeHTTPError: If workflow not found or metadata missing
+        """
+        url = urljoin(self.base_url, f"/workflows/{workflow_name}/worker-info")
+        response = self._client.get(url)
+        return self._handle_response(response)
+
+    async def aget_workflow_worker_info(self, workflow_name: str) -> Dict[str, Any]:
+        """
+        Get worker information for a workflow (async).
+
+        Returns details about which worker is required to execute this workflow,
+        including container name, task queue, and vertical.
+
+        Args:
+            workflow_name: Name of the workflow
+
+        Returns:
+            Dictionary with worker info including:
+                - workflow: Workflow name
+                - vertical: Worker vertical (e.g., "ossfuzz", "python", "rust")
+                - worker_container: Docker container name
+                - task_queue: Temporal task queue name
+                - required: Whether worker is required (always True)
+
+        Raises:
+            FuzzForgeHTTPError: If workflow not found or metadata missing
+        """
+        url = urljoin(self.base_url, f"/workflows/{workflow_name}/worker-info")
+        response = await self._async_client.get(url)
+        return await self._ahandle_response(response)
+
     def submit_workflow(
         self,
         workflow_name: str,
@@ -234,6 +286,232 @@ class FuzzForgeClient:
         response = await self._async_client.post(url, json=submission.model_dump())
         data = await self._ahandle_response(response)
         return RunSubmissionResponse(**data)
+
+    def _create_tarball(
+        self,
+        source_path: Path,
+        progress_callback: Optional[Callable[[int], None]] = None
+    ) -> Path:
+        """
+        Create a compressed tarball from a file or directory.
+
+        Args:
+            source_path: Path to file or directory to archive
+            progress_callback: Optional callback(bytes_written) for progress tracking
+
+        Returns:
+            Path to the created tarball
+
+        Raises:
+            FileNotFoundError: If source_path doesn't exist
+        """
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source path not found: {source_path}")
+
+        # Create temp file for tarball
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".tar.gz")
+
+        try:
+            logger.info(f"Creating tarball from {source_path}")
+
+            bytes_written = 0
+
+            with tarfile.open(temp_path, "w:gz") as tar:
+                if source_path.is_file():
+                    # Add single file
+                    tar.add(source_path, arcname=source_path.name)
+                    bytes_written = source_path.stat().st_size
+                    if progress_callback:
+                        progress_callback(bytes_written)
+                else:
+                    # Add directory recursively
+                    for item in source_path.rglob("*"):
+                        if item.is_file():
+                            arcname = item.relative_to(source_path)
+                            tar.add(item, arcname=arcname)
+                            bytes_written += item.stat().st_size
+                            if progress_callback:
+                                progress_callback(bytes_written)
+
+            tarball_path = Path(temp_path)
+            tarball_size = tarball_path.stat().st_size
+            logger.info(
+                f"Created tarball: {tarball_size / (1024**2):.2f} MB "
+                f"(compressed from {bytes_written / (1024**2):.2f} MB)"
+            )
+
+            return tarball_path
+
+        except Exception:
+            # Cleanup on error
+            if Path(temp_path).exists():
+                Path(temp_path).unlink()
+            raise
+
+    def submit_workflow_with_upload(
+        self,
+        workflow_name: str,
+        target_path: Union[str, Path],
+        parameters: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> RunSubmissionResponse:
+        """
+        Submit a workflow with file upload from local filesystem.
+
+        This method automatically creates a tarball if target_path is a directory,
+        uploads it to the backend, and submits the workflow for execution.
+
+        Args:
+            workflow_name: Name of the workflow to execute
+            target_path: Local path to file or directory to analyze
+            parameters: Workflow-specific parameters
+            timeout: Timeout in seconds
+            progress_callback: Optional callback(bytes_uploaded, total_bytes) for progress
+
+        Returns:
+            Run submission response with run_id
+
+        Raises:
+            FileNotFoundError: If target_path doesn't exist
+            FuzzForgeHTTPError: For API errors
+        """
+        target_path = Path(target_path)
+        tarball_path = None
+
+        try:
+            # Create tarball if needed
+            if target_path.is_dir():
+                logger.info("Target is directory, creating tarball...")
+                tarball_path = self._create_tarball(target_path)
+                upload_file = tarball_path
+                filename = f"{target_path.name}.tar.gz"
+            else:
+                upload_file = target_path
+                filename = target_path.name
+
+            # Prepare multipart form data
+            url = urljoin(self.base_url, f"/workflows/{workflow_name}/upload-and-submit")
+
+            files = {
+                "file": (filename, open(upload_file, "rb"), "application/gzip")
+            }
+
+            data = {}
+
+            if parameters:
+                data["parameters"] = json.dumps(parameters)
+
+            if timeout:
+                data["timeout"] = str(timeout)
+
+            logger.info(f"Uploading {filename} to {workflow_name}...")
+
+            # Track upload progress
+            if progress_callback:
+                file_size = upload_file.stat().st_size
+
+                def track_progress(monitor):
+                    progress_callback(monitor.bytes_read, file_size)
+
+                # Note: httpx doesn't have built-in progress tracking for uploads
+                # This is a placeholder - real implementation would need custom approach
+                pass
+
+            response = self._client.post(url, files=files, data=data)
+
+            # Close file handle
+            files["file"][1].close()
+
+            data = self._handle_response(response)
+            return RunSubmissionResponse(**data)
+
+        finally:
+            # Cleanup temporary tarball
+            if tarball_path and tarball_path.exists():
+                try:
+                    tarball_path.unlink()
+                    logger.debug(f"Cleaned up temporary tarball: {tarball_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup tarball {tarball_path}: {e}")
+
+    async def asubmit_workflow_with_upload(
+        self,
+        workflow_name: str,
+        target_path: Union[str, Path],
+        parameters: Optional[Dict[str, Any]] = None,
+        volume_mode: str = "ro",
+        timeout: Optional[int] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> RunSubmissionResponse:
+        """
+        Submit a workflow with file upload from local filesystem (async).
+
+        This method automatically creates a tarball if target_path is a directory,
+        uploads it to the backend, and submits the workflow for execution.
+
+        Args:
+            workflow_name: Name of the workflow to execute
+            target_path: Local path to file or directory to analyze
+            parameters: Workflow-specific parameters
+            volume_mode: Volume mount mode ("ro" or "rw")
+            timeout: Timeout in seconds
+            progress_callback: Optional callback(bytes_uploaded, total_bytes) for progress
+
+        Returns:
+            Run submission response with run_id
+
+        Raises:
+            FileNotFoundError: If target_path doesn't exist
+            FuzzForgeHTTPError: For API errors
+        """
+        target_path = Path(target_path)
+        tarball_path = None
+
+        try:
+            # Create tarball if needed
+            if target_path.is_dir():
+                logger.info("Target is directory, creating tarball...")
+                tarball_path = self._create_tarball(target_path)
+                upload_file = tarball_path
+                filename = f"{target_path.name}.tar.gz"
+            else:
+                upload_file = target_path
+                filename = target_path.name
+
+            # Prepare multipart form data
+            url = urljoin(self.base_url, f"/workflows/{workflow_name}/upload-and-submit")
+
+            files = {
+                "file": (filename, open(upload_file, "rb"), "application/gzip")
+            }
+
+            data = {}
+
+            if parameters:
+                data["parameters"] = json.dumps(parameters)
+
+            if timeout:
+                data["timeout"] = str(timeout)
+
+            logger.info(f"Uploading {filename} to {workflow_name}...")
+
+            response = await self._async_client.post(url, files=files, data=data)
+
+            # Close file handle
+            files["file"][1].close()
+
+            response_data = await self._ahandle_response(response)
+            return RunSubmissionResponse(**response_data)
+
+        finally:
+            # Cleanup temporary tarball
+            if tarball_path and tarball_path.exists():
+                try:
+                    tarball_path.unlink()
+                    logger.debug(f"Cleaned up temporary tarball: {tarball_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup tarball {tarball_path}: {e}")
 
     # Run management methods
 

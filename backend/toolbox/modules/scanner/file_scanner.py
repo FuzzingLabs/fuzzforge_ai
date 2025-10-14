@@ -16,16 +16,16 @@ File Scanner Module - Scans and enumerates files in the workspace
 import logging
 import mimetypes
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any
 import hashlib
 
 try:
-    from toolbox.modules.base import BaseModule, ModuleMetadata, ModuleResult, ModuleFinding
+    from toolbox.modules.base import BaseModule, ModuleMetadata, ModuleResult
 except ImportError:
     try:
-        from modules.base import BaseModule, ModuleMetadata, ModuleResult, ModuleFinding
+        from modules.base import BaseModule, ModuleMetadata, ModuleResult
     except ImportError:
-        from src.toolbox.modules.base import BaseModule, ModuleMetadata, ModuleResult, ModuleFinding
+        from src.toolbox.modules.base import BaseModule, ModuleMetadata, ModuleResult
 
 logger = logging.getLogger(__name__)
 

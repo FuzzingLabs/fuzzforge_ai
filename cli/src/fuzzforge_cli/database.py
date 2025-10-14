@@ -163,7 +163,7 @@ class FuzzForgeDatabase:
                     "Database is corrupted. Use 'ff init --force' to reset."
                 ) from e
             raise
-        except Exception as e:
+        except Exception:
             if conn:
                 try:
                     conn.rollback()

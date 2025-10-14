@@ -27,18 +27,14 @@ from typing import List, Dict, Any
 import time
 
 from fuzzforge_sdk import (
-    FuzzForgeClient,
-    WorkflowSubmission,
-    WorkflowFindings,
-    RunSubmissionResponse
+    FuzzForgeClient
 )
 from fuzzforge_sdk.utils import (
     create_workflow_submission,
     format_sarif_summary,
     count_sarif_severity_levels,
     save_sarif_to_file,
-    get_project_files,
-    estimate_analysis_time
+    get_project_files
 )
 
 
@@ -308,7 +304,7 @@ async def main():
             batch_duration = batch_end_time - batch_start_time
 
             # Generate batch summary report
-            print(f"\n📊 Batch Analysis Complete!")
+            print("\n📊 Batch Analysis Complete!")
             print(f"   Total time: {batch_duration:.1f}s")
             print(f"   Projects analyzed: {len(analyzer.results)}")
 
@@ -345,7 +341,7 @@ async def main():
             print(f"   Batch summary: {batch_summary_file}")
 
             # Display project summaries
-            print(f"\n📈 Project Summaries:")
+            print("\n📈 Project Summaries:")
             for result in analyzer.results:
                 print(f"   {result['project_name']}: " +
                       f"{result['summary']['successful_workflows']}/{result['summary']['total_workflows']} workflows successful, " +

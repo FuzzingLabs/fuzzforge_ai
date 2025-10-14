@@ -97,6 +97,43 @@ If you prefer, you can use a systemd override to add the registry flag. See the 
 
 ---
 
+## Worker Profiles (Resource Optimization - v0.7.0)
+
+FuzzForge workers use Docker Compose profiles to prevent auto-startup:
+
+```yaml
+# docker-compose.yml
+worker-ossfuzz:
+  profiles:
+    - workers    # For starting all workers
+    - ossfuzz    # For starting just this worker
+  restart: "no"  # Don't auto-restart
+```
+
+### Behavior
+
+- **`docker-compose up -d`**: Workers DON'T start (saves ~6-7GB RAM)
+- **CLI workflows**: Workers start automatically on-demand
+- **Manual start**: `docker start fuzzforge-worker-ossfuzz`
+
+### Resource Savings
+
+| Command | Workers Started | RAM Usage |
+|---------|----------------|-----------|
+| `docker-compose up -d` | None (core only) | ~1.2 GB |
+| `ff workflow run ossfuzz_campaign .` | ossfuzz worker only | ~3-5 GB |
+| `docker-compose --profile workers up -d` | All workers | ~8 GB |
+
+### Starting All Workers (Legacy Behavior)
+
+If you prefer the old behavior where all workers start:
+
+```bash
+docker-compose --profile workers up -d
+```
+
+---
+
 ## Common Issues & How to Fix Them
 
 ### "x509: certificate signed by unknown authority"

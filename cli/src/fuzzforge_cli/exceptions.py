@@ -15,7 +15,7 @@ Enhanced exception handling and error utilities for FuzzForge CLI with rich cont
 
 import time
 import functools
-from typing import Any, Callable, Optional, Type, Union, List
+from typing import Any, Callable, Optional, Union, List
 from pathlib import Path
 
 import typer
@@ -24,20 +24,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
-from rich.columns import Columns
-from rich.syntax import Syntax
-from rich.markdown import Markdown
 
 # Import SDK exceptions for rich handling
 from fuzzforge_sdk.exceptions import (
-    FuzzForgeError as SDKFuzzForgeError,
-    FuzzForgeHTTPError,
-    DeploymentError,
-    WorkflowExecutionError,
-    ContainerError,
-    VolumeError,
-    ValidationError as SDKValidationError,
-    ConnectionError as SDKConnectionError
+    FuzzForgeError as SDKFuzzForgeError
 )
 
 console = Console()
@@ -335,7 +325,7 @@ def handle_error(error: Exception, context: str = "") -> None:
 
         # Show error details for debugging
         console.print(f"\n[dim yellow]Error type: {type(error).__name__}[/dim yellow]")
-        console.print(f"[dim yellow]Please report this issue if it persists[/dim yellow]")
+        console.print("[dim yellow]Please report this issue if it persists[/dim yellow]")
         console.print()
 
         raise typer.Exit(1)
@@ -430,8 +420,9 @@ def validate_run_id(run_id: str) -> str:
     if not run_id or len(run_id) < 8:
         raise ValidationError("run_id", run_id, "at least 8 characters")
 
-    if not run_id.replace('-', '').isalnum():
-        raise ValidationError("run_id", run_id, "alphanumeric characters and hyphens only")
+    # Allow alphanumeric characters, hyphens, and underscores
+    if not run_id.replace('-', '').replace('_', '').isalnum():
+        raise ValidationError("run_id", run_id, "alphanumeric characters, hyphens, and underscores only")
 
     return run_id
 

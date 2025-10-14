@@ -17,7 +17,6 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
-import json
 
 try:
     from toolbox.modules.base import BaseModule, ModuleMetadata, ModuleResult, ModuleFinding

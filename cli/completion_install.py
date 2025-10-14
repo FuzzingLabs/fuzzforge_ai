@@ -207,7 +207,7 @@ def install_zsh_completion():
 
         # Add fpath to .zshrc if not present
         zshrc = Path.home() / ".zshrc"
-        fpath_line = f'fpath=(~/.zsh/completions $fpath)'
+        fpath_line = 'fpath=(~/.zsh/completions $fpath)'
         autoload_line = 'autoload -U compinit && compinit'
 
         if zshrc.exists():
@@ -222,7 +222,7 @@ def install_zsh_completion():
 
             if lines_to_add:
                 with zshrc.open("a") as f:
-                    f.write(f"\n# FuzzForge CLI completion\n")
+                    f.write("\n# FuzzForge CLI completion\n")
                     for line in lines_to_add:
                         f.write(f"{line}\n")
                 print("✅ Added completion setup to ~/.zshrc")
