@@ -13,7 +13,7 @@
 
 try:
     from fuzzforge_cli.config import ProjectConfigManager as _ProjectConfigManager
-except ImportError as exc:  # pragma: no cover - used when CLI not available
+except ImportError:  # pragma: no cover - used when CLI not available
     class _ProjectConfigManager:  # type: ignore[no-redef]
         """Fallback implementation that raises a helpful error."""
 

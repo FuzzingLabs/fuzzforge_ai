@@ -117,7 +117,6 @@ def config(
     """
     ⚙️  Manage configuration (show all, get, or set values)
     """
-    from .commands import config as config_cmd
 
     if key is None:
         # No arguments: show all config
@@ -386,7 +385,7 @@ def version():
     """
     from . import __version__
     console.print(f"FuzzForge CLI v{__version__}")
-    console.print(f"Short command: ff")
+    console.print("Short command: ff")
 
 
 @app.callback()

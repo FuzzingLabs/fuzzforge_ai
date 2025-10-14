@@ -24,23 +24,20 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.prompt import Prompt, Confirm
-from rich.live import Live
 from rich import box
 
 from ..config import get_project_config, FuzzForgeConfig
 from ..database import get_project_db, ensure_project_db, RunRecord
 from ..exceptions import (
     handle_error, retry_on_network_error, safe_json_load, require_project,
-    APIConnectionError, ValidationError, DatabaseError, FileOperationError
+    ValidationError, DatabaseError
 )
 from ..validation import (
     validate_run_id, validate_workflow_name, validate_target_path,
-    validate_volume_mode, validate_parameters, validate_timeout
+    validate_parameters, validate_timeout
 )
-from ..progress import progress_manager, spinner, step_progress
-from ..completion import WorkflowNameComplete, TargetPathComplete, VolumeModetComplete
+from ..progress import step_progress
 from ..constants import (
     STATUS_EMOJIS, MAX_RUN_ID_DISPLAY_LENGTH, DEFAULT_VOLUME_MODE,
     PROGRESS_STEP_DELAYS, MAX_RETRIES, RETRY_DELAY, POLL_INTERVAL
@@ -123,13 +120,11 @@ def execute_workflow_submission(
     # Get workflow metadata for parameter validation
     console.print(f"🔧 Getting workflow information for: {workflow}")
     workflow_meta = client.get_workflow_metadata(workflow)
-    param_response = client.get_workflow_parameters(workflow)
 
     # Interactive parameter input
     if interactive and workflow_meta.parameters.get("properties"):
         properties = workflow_meta.parameters.get("properties", {})
         required_params = set(workflow_meta.parameters.get("required", []))
-        defaults = param_response.default_parameters
 
         missing_required = required_params - set(parameters.keys())
 
@@ -168,7 +163,7 @@ def execute_workflow_submission(
     # Note: volume_mode is no longer used (Temporal uses MinIO storage)
 
     # Show submission summary
-    console.print(f"\n🎯 [bold]Executing workflow:[/bold]")
+    console.print("\n🎯 [bold]Executing workflow:[/bold]")
     console.print(f"   Workflow: {workflow}")
     console.print(f"   Target: {target_path}")
     console.print(f"   Volume Mode: {volume_mode}")
@@ -190,8 +185,8 @@ def execute_workflow_submission(
             size_mb = target_path_obj.stat().st_size / (1024 * 1024)
             console.print(f"   Upload: File ({size_mb:.2f} MB)")
     else:
-        console.print(f"   [yellow]⚠️  Warning: Target path does not exist locally[/yellow]")
-        console.print(f"   [yellow]   Attempting to use path-based submission (backend must have access)[/yellow]")
+        console.print("   [yellow]⚠️  Warning: Target path does not exist locally[/yellow]")
+        console.print("   [yellow]   Attempting to use path-based submission (backend must have access)[/yellow]")
 
     # Only ask for confirmation in interactive mode
     if interactive:
@@ -237,7 +232,7 @@ def execute_workflow_submission(
             progress.next_step()  # Initializing
             time.sleep(PROGRESS_STEP_DELAYS["initializing"])
 
-            progress.complete(f"Workflow started successfully!")
+            progress.complete("Workflow started successfully!")
     else:
         # Fall back to path-based submission (for backward compatibility)
         steps = [
@@ -271,7 +266,7 @@ def execute_workflow_submission(
             progress.next_step()  # Initializing
             time.sleep(PROGRESS_STEP_DELAYS["initializing"])
 
-            progress.complete(f"Workflow started successfully!")
+            progress.complete("Workflow started successfully!")
 
     return response
 
@@ -418,7 +413,7 @@ def execute_workflow(
                 volume_mode, timeout, interactive
             )
 
-            console.print(f"✅ Workflow execution started!", style="green")
+            console.print("✅ Workflow execution started!", style="green")
             console.print(f"   Execution ID: [bold cyan]{response.run_id}[/bold cyan]")
             console.print(f"   Status: {status_emoji(response.status)} {response.status}")
 
@@ -450,10 +445,10 @@ def execute_workflow(
                 # Check if this is a fuzzing workflow to show appropriate messaging
                 is_fuzzing = "fuzzing" in workflow.lower()
                 if is_fuzzing:
-                    console.print(f"\n📺 Starting live fuzzing monitor...")
+                    console.print("\n📺 Starting live fuzzing monitor...")
                     console.print("💡 You'll see real-time crash discovery, execution stats, and coverage data.")
                 else:
-                    console.print(f"\n📺 Starting live monitoring...")
+                    console.print("\n📺 Starting live monitoring...")
 
                 console.print("Press Ctrl+C to stop monitoring (execution continues in background).\n")
 
@@ -462,14 +457,14 @@ def execute_workflow(
                     # Import monitor command and run it
                     live_monitor(response.run_id, refresh=3)
                 except KeyboardInterrupt:
-                    console.print(f"\n⏹️  Live monitoring stopped (execution continues in background)", style="yellow")
+                    console.print("\n⏹️  Live monitoring stopped (execution continues in background)", style="yellow")
                 except Exception as e:
                     console.print(f"⚠️  Failed to start live monitoring: {e}", style="yellow")
                     console.print(f"💡 You can still monitor manually: [bold cyan]fuzzforge monitor {response.run_id}[/bold cyan]")
 
             # Wait for completion if requested
             elif wait:
-                console.print(f"\n⏳ Waiting for execution to complete...")
+                console.print("\n⏳ Waiting for execution to complete...")
                 try:
                     final_status = client.wait_for_completion(response.run_id, poll_interval=POLL_INTERVAL)
 
@@ -490,7 +485,7 @@ def execute_workflow(
                         # Export SARIF if requested
                         if export_sarif:
                             try:
-                                console.print(f"\n📤 Exporting SARIF results...")
+                                console.print("\n📤 Exporting SARIF results...")
                                 findings = client.get_run_findings(response.run_id)
                                 output_path = Path(export_sarif)
                                 with open(output_path, 'w') as f:
@@ -519,7 +514,7 @@ def execute_workflow(
                             console.print(f"💡 View findings: [bold cyan]fuzzforge findings {response.run_id}[/bold cyan]")
 
                 except KeyboardInterrupt:
-                    console.print(f"\n⏹️  Monitoring cancelled (execution continues in background)", style="yellow")
+                    console.print("\n⏹️  Monitoring cancelled (execution continues in background)", style="yellow")
                 except typer.Exit:
                     raise  # Re-raise Exit to preserve exit code
                 except Exception as e:
@@ -533,7 +528,7 @@ def execute_workflow(
         # Stop worker if auto-stop is enabled and wait completed
         if should_auto_stop and worker_container and worker_mgr and wait_completed:
             try:
-                console.print(f"\n🛑 Stopping worker (auto-stop enabled)...")
+                console.print("\n🛑 Stopping worker (auto-stop enabled)...")
                 if worker_mgr.stop_worker(worker_container):
                     console.print(f"✅ Worker stopped: {worker_container}")
             except Exception as e:
@@ -605,7 +600,7 @@ def workflow_status(
         console.print(
             Panel.fit(
                 status_table,
-                title=f"📊 Status Information",
+                title="📊 Status Information",
                 box=box.ROUNDED
             )
         )
@@ -675,7 +670,7 @@ def workflow_history(
         console.print()
         console.print(table)
 
-        console.print(f"\n💡 Use [bold cyan]fuzzforge workflow status <execution-id>[/bold cyan] for detailed status")
+        console.print("\n💡 Use [bold cyan]fuzzforge workflow status <execution-id>[/bold cyan] for detailed status")
 
     except Exception as e:
         handle_error(e, "listing execution history")
@@ -723,7 +718,7 @@ def retry_workflow(
 
         # Modify parameters if requested
         if modify_params and parameters:
-            console.print(f"\n📝 [bold]Current parameters:[/bold]")
+            console.print("\n📝 [bold]Current parameters:[/bold]")
             for key, value in parameters.items():
                 new_value = Prompt.ask(
                     f"{key}",
@@ -755,7 +750,7 @@ def retry_workflow(
 
             response = client.submit_workflow(original_run.workflow, submission)
 
-            console.print(f"\n✅ Retry submitted successfully!", style="green")
+            console.print("\n✅ Retry submitted successfully!", style="green")
             console.print(f"   New Execution ID: [bold cyan]{response.run_id}[/bold cyan]")
             console.print(f"   Status: {status_emoji(response.status)} {response.status}")
 

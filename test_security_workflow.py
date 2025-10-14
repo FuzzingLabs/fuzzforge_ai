@@ -4,7 +4,6 @@ Test security_assessment workflow with vulnerable_app test project
 """
 
 import asyncio
-import os
 import shutil
 import sys
 import uuid
@@ -84,7 +83,7 @@ async def main():
         return 1
 
     # Step 4: Execute workflow
-    print(f"\n[4/5] Executing security_assessment workflow...")
+    print("\n[4/5] Executing security_assessment workflow...")
     workflow_id = f"security-assessment-{target_id}"
 
     try:
@@ -102,7 +101,7 @@ async def main():
         return 1
 
     # Step 5: Display results
-    print(f"\n[5/5] Results Summary:")
+    print("\n[5/5] Results Summary:")
     print("=" * 70)
 
     if result.get("status") == "success":

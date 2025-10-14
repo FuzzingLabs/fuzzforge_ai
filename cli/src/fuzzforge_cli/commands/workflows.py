@@ -18,10 +18,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Prompt
 from rich.syntax import Syntax
 from rich import box
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from ..config import get_project_config, FuzzForgeConfig
 from ..fuzzy import enhanced_workflow_not_found_handler
@@ -68,7 +68,7 @@ def list_workflows():
         console.print(f"\n🔧 [bold]Available Workflows ({len(workflows)})[/bold]\n")
         console.print(table)
 
-        console.print(f"\n💡 Use [bold cyan]fuzzforge workflows info <name>[/bold cyan] for detailed information")
+        console.print("\n💡 Use [bold cyan]fuzzforge workflows info <name>[/bold cyan] for detailed information")
 
     except Exception as e:
         console.print(f"❌ Failed to fetch workflows: {e}", style="red")

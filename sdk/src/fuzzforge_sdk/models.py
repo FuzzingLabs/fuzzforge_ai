@@ -16,10 +16,9 @@ and serialization for all API requests and responses.
 # Additional attribution and requirements are provided in the NOTICE file.
 
 
-from pydantic import BaseModel, Field, validator
-from typing import Dict, Any, Optional, Literal, List, Union
+from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
-from pathlib import Path
 
 
 class WorkflowSubmission(BaseModel):

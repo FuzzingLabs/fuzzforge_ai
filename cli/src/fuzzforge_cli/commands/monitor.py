@@ -14,8 +14,7 @@ Real-time monitoring and statistics commands.
 
 
 import time
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 import typer
 from rich.console import Console
@@ -25,7 +24,7 @@ from rich.live import Live
 from rich import box
 
 from ..config import get_project_config, FuzzForgeConfig
-from ..database import get_project_db, ensure_project_db, CrashRecord
+from ..database import ensure_project_db, CrashRecord
 from fuzzforge_sdk import FuzzForgeClient
 
 console = Console()
@@ -214,7 +213,7 @@ def crash_reports(
         console.print(
             Panel.fit(
                 summary_table,
-                title=f"🐛 Crash Summary",
+                title="🐛 Crash Summary",
                 box=box.ROUNDED
             )
         )
@@ -254,7 +253,7 @@ def crash_reports(
                     input_display
                 )
 
-            console.print(f"\n🐛 [bold]Crash Details[/bold]")
+            console.print("\n🐛 [bold]Crash Details[/bold]")
             if len(crashes) > limit:
                 console.print(f"Showing first {limit} of {len(crashes)} crashes")
             console.print()

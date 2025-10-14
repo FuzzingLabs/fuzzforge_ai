@@ -21,18 +21,17 @@ from typing import Optional, Dict, Any, List
 
 import typer
 from rich.console import Console
-from rich.table import Table, Column
+from rich.table import Table
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich.tree import Tree
 from rich.text import Text
 from rich import box
 
 from ..config import get_project_config, FuzzForgeConfig
 from ..database import get_project_db, ensure_project_db, FindingRecord
 from ..exceptions import (
-    handle_error, retry_on_network_error, validate_run_id,
-    require_project, ValidationError, DatabaseError
+    retry_on_network_error, validate_run_id,
+    require_project, ValidationError
 )
 from fuzzforge_sdk import FuzzForgeClient
 
@@ -159,7 +158,7 @@ def display_findings_table(sarif_data: Dict[str, Any]):
     driver = tool.get("driver", {})
 
     # Tool information
-    console.print(f"\n🔍 [bold]Security Analysis Results[/bold]")
+    console.print("\n🔍 [bold]Security Analysis Results[/bold]")
     if driver.get("name"):
         console.print(f"Tool: {driver.get('name')} v{driver.get('version', 'unknown')}")
 
@@ -241,7 +240,7 @@ def display_findings_table(sarif_data: Dict[str, Any]):
             location_text
         )
 
-    console.print(f"\n📋 [bold]Detailed Results[/bold]")
+    console.print("\n📋 [bold]Detailed Results[/bold]")
     if len(results) > 50:
         console.print(f"Showing first 50 of {len(results)} results")
     console.print()
@@ -297,7 +296,7 @@ def findings_history(
         console.print(f"\n📚 [bold]Findings History ({len(findings)})[/bold]\n")
         console.print(table)
 
-        console.print(f"\n💡 Use [bold cyan]fuzzforge finding <run-id>[/bold cyan] to view detailed findings")
+        console.print("\n💡 Use [bold cyan]fuzzforge finding <run-id>[/bold cyan] to view detailed findings")
 
     except Exception as e:
         console.print(f"❌ Failed to get findings history: {e}", style="red")
@@ -710,10 +709,10 @@ def all_findings(
         if show_findings:
             display_detailed_findings(findings, max_findings)
 
-        console.print(f"\n💡 Use filters to refine results: --workflow, --severity, --since")
-        console.print(f"💡 Show findings content: --show-findings")
-        console.print(f"💡 Export findings: --export json --output report.json")
-        console.print(f"💡 View specific findings: [bold cyan]fuzzforge finding <run-id>[/bold cyan]")
+        console.print("\n💡 Use filters to refine results: --workflow, --severity, --since")
+        console.print("💡 Show findings content: --show-findings")
+        console.print("💡 Export findings: --export json --output report.json")
+        console.print("💡 View specific findings: [bold cyan]fuzzforge finding <run-id>[/bold cyan]")
 
     except Exception as e:
         console.print(f"❌ Failed to get all findings: {e}", style="red")

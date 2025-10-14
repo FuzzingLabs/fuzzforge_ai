@@ -15,11 +15,9 @@ Provides integrated Cognee functionality for codebase analysis and knowledge gra
 
 
 import os
-import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-from datetime import datetime
+from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 

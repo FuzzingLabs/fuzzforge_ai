@@ -25,7 +25,7 @@ import asyncio
 import time
 from pathlib import Path
 
-from fuzzforge_sdk import FuzzForgeClient, WorkflowSubmission
+from fuzzforge_sdk import FuzzForgeClient
 from fuzzforge_sdk.utils import create_workflow_submission, format_sarif_summary, format_duration
 
 
@@ -61,7 +61,7 @@ def main():
 
         # Get workflow metadata
         metadata = client.get_workflow_metadata(selected_workflow.name)
-        print(f"📝 Workflow metadata:")
+        print("📝 Workflow metadata:")
         print(f"  Author: {metadata.author}")
         print(f"  Required modules: {metadata.required_modules}")
         print(f"  Supported volume modes: {metadata.supported_volume_modes}")
@@ -81,7 +81,7 @@ def main():
         # Submit the workflow
         print(f"🚀 Submitting workflow '{selected_workflow.name}'...")
         response = client.submit_workflow(selected_workflow.name, submission)
-        print(f"✅ Workflow submitted!")
+        print("✅ Workflow submitted!")
         print(f"   Run ID: {response.run_id}")
         print(f"   Status: {response.status}")
         print()
@@ -124,7 +124,7 @@ def main():
 
             # Display metadata
             if findings.metadata:
-                print(f"🔍 Metadata:")
+                print("🔍 Metadata:")
                 for key, value in findings.metadata.items():
                     print(f"   {key}: {value}")
 
@@ -180,7 +180,7 @@ def main():
                     # Additional properties
                     properties = result.get('properties', {})
                     if properties:
-                        print(f"   Properties:")
+                        print("   Properties:")
                         for prop_key, prop_value in properties.items():
                             print(f"     {prop_key}: {prop_value}")
 

@@ -18,13 +18,11 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm
 from rich import box
-from typing import Optional
 
 from ..config import (
     get_project_config,
-    ensure_project_config,
     get_global_config,
     save_global_config,
     FuzzForgeConfig
@@ -335,7 +333,6 @@ def edit_config(
     """
     📝 Open configuration file in default editor
     """
-    import os
     import subprocess
 
     if global_config:
@@ -369,7 +366,7 @@ def edit_config(
     try:
         console.print(f"📝 Opening {config_type} configuration in {editor}...")
         subprocess.run([editor, str(config_path)], check=True)
-        console.print(f"✅ Configuration file edited", style="green")
+        console.print("✅ Configuration file edited", style="green")
 
     except subprocess.CalledProcessError as e:
         console.print(f"❌ Failed to open editor: {e}", style="red")

@@ -18,7 +18,6 @@ from typing import Optional, Union
 
 from starlette.applications import Starlette
 from starlette.responses import Response, FileResponse
-from starlette.routing import Route
 
 from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
 from google.adk.a2a.utils.agent_card_builder import AgentCardBuilder

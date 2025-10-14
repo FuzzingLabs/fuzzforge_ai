@@ -57,7 +57,6 @@ class OssfuzzCampaignWorkflow:
             Dictionary containing crashes, stats, and SARIF report
         """
         workflow_id = workflow.info().workflow_id
-        run_id = workflow.info().run_id
 
         workflow.logger.info(
             f"Starting OSS-Fuzz Campaign for project '{project_name}' "

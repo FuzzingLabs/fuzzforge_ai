@@ -24,7 +24,6 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any, List, Optional, AsyncIterator, Iterator, Union, Callable
 from urllib.parse import urljoin, urlparse
-import warnings
 
 import httpx
 import websockets
@@ -343,7 +342,7 @@ class FuzzForgeClient:
 
             return tarball_path
 
-        except Exception as e:
+        except Exception:
             # Cleanup on error
             if Path(temp_path).exists():
                 Path(temp_path).unlink()
@@ -383,7 +382,7 @@ class FuzzForgeClient:
         try:
             # Create tarball if needed
             if target_path.is_dir():
-                logger.info(f"Target is directory, creating tarball...")
+                logger.info("Target is directory, creating tarball...")
                 tarball_path = self._create_tarball(target_path)
                 upload_file = tarball_path
                 filename = f"{target_path.name}.tar.gz"
@@ -472,7 +471,7 @@ class FuzzForgeClient:
         try:
             # Create tarball if needed
             if target_path.is_dir():
-                logger.info(f"Target is directory, creating tarball...")
+                logger.info("Target is directory, creating tarball...")
                 tarball_path = self._create_tarball(target_path)
                 upload_file = tarball_path
                 filename = f"{target_path.name}.tar.gz"

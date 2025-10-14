@@ -115,7 +115,7 @@ def show_status():
             api_table.add_column("Property", style="bold cyan")
             api_table.add_column("Value")
 
-            api_table.add_row("Status", f"✅ Connected")
+            api_table.add_row("Status", "✅ Connected")
             api_table.add_row("Service", f"{api_status.name} v{api_status.version}")
             api_table.add_row("Workflows", str(len(workflows)))
 

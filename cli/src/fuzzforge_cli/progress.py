@@ -16,10 +16,9 @@ Provides rich progress bars, spinners, and status displays for all long-running 
 
 
 import time
-import asyncio
 from contextlib import contextmanager
-from typing import Optional, Callable, Any, Dict, List
-from datetime import datetime, timedelta
+from typing import Optional, Any, Dict, List
+from datetime import datetime
 
 from rich.console import Console
 from rich.progress import (

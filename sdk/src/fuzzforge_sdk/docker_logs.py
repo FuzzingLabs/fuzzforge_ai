@@ -20,7 +20,7 @@ import logging
 import re
 import subprocess
 import json
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from dataclasses import dataclass
 

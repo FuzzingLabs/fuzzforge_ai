@@ -14,10 +14,10 @@ API response validation and graceful degradation utilities.
 
 
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ValidationError as PydanticValidationError
 
-from .exceptions import ValidationError, APIConnectionError
+from .exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 

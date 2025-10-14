@@ -74,7 +74,7 @@ async def main():
         task_queue="rust-queue",  # Route to rust worker
     )
 
-    print(f"✓ Workflow started!")
+    print("✓ Workflow started!")
     print(f"  Workflow ID: {workflow_id}")
     print(f"  Run ID: {handle.first_execution_run_id}")
     print(f"\n  View in UI: http://localhost:8080/namespaces/default/workflows/{workflow_id}")
@@ -85,14 +85,14 @@ async def main():
     print("\n" + "=" * 60)
     print("✓ WORKFLOW COMPLETED SUCCESSFULLY!")
     print("=" * 60)
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Status: {result.get('status')}")
     print(f"  Workflow ID: {result.get('workflow_id')}")
     print(f"  Target ID: {result.get('target_id')}")
     print(f"  Message: {result.get('message')}")
     print(f"  Results URL: {result.get('results_url')}")
 
-    print(f"\nSteps executed:")
+    print("\nSteps executed:")
     for i, step in enumerate(result.get('steps', []), 1):
         print(f"  {i}. {step.get('step')}: {step.get('status')}")
 

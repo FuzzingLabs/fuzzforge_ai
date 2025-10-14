@@ -134,7 +134,7 @@ class WorkerManager:
             console.print(f"🚀 Starting worker: {container_name}")
 
             # Use docker start directly (works with container name)
-            result = subprocess.run(
+            subprocess.run(
                 ["docker", "start", container_name],
                 capture_output=True,
                 text=True,
@@ -171,7 +171,7 @@ class WorkerManager:
         timeout = timeout or self.startup_timeout
         start_time = time.time()
 
-        console.print(f"⏳ Waiting for worker to be ready...")
+        console.print("⏳ Waiting for worker to be ready...")
 
         while time.time() - start_time < timeout:
             # Check if container is running
@@ -228,7 +228,7 @@ class WorkerManager:
             console.print(f"🛑 Stopping worker: {container_name}")
 
             # Use docker stop directly (works with container name)
-            result = subprocess.run(
+            subprocess.run(
                 ["docker", "stop", container_name],
                 capture_output=True,
                 text=True,
