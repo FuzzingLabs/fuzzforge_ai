@@ -216,6 +216,56 @@ class FuzzForgeClient:
         response = await self._async_client.get(url)
         return await self._ahandle_response(response)
 
+    def get_workflow_worker_info(self, workflow_name: str) -> Dict[str, Any]:
+        """
+        Get worker information for a workflow.
+
+        Returns details about which worker is required to execute this workflow,
+        including container name, task queue, and vertical.
+
+        Args:
+            workflow_name: Name of the workflow
+
+        Returns:
+            Dictionary with worker info including:
+                - workflow: Workflow name
+                - vertical: Worker vertical (e.g., "ossfuzz", "python", "rust")
+                - worker_container: Docker container name
+                - task_queue: Temporal task queue name
+                - required: Whether worker is required (always True)
+
+        Raises:
+            FuzzForgeHTTPError: If workflow not found or metadata missing
+        """
+        url = urljoin(self.base_url, f"/workflows/{workflow_name}/worker-info")
+        response = self._client.get(url)
+        return self._handle_response(response)
+
+    async def aget_workflow_worker_info(self, workflow_name: str) -> Dict[str, Any]:
+        """
+        Get worker information for a workflow (async).
+
+        Returns details about which worker is required to execute this workflow,
+        including container name, task queue, and vertical.
+
+        Args:
+            workflow_name: Name of the workflow
+
+        Returns:
+            Dictionary with worker info including:
+                - workflow: Workflow name
+                - vertical: Worker vertical (e.g., "ossfuzz", "python", "rust")
+                - worker_container: Docker container name
+                - task_queue: Temporal task queue name
+                - required: Whether worker is required (always True)
+
+        Raises:
+            FuzzForgeHTTPError: If workflow not found or metadata missing
+        """
+        url = urljoin(self.base_url, f"/workflows/{workflow_name}/worker-info")
+        response = await self._async_client.get(url)
+        return await self._ahandle_response(response)
+
     def submit_workflow(
         self,
         workflow_name: str,

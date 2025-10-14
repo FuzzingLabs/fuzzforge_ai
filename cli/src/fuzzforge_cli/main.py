@@ -205,10 +205,29 @@ def run_workflow(
     live: bool = typer.Option(
         False, "--live", "-l",
         help="Start live monitoring after execution (useful for fuzzing workflows)"
+    ),
+    auto_start: Optional[bool] = typer.Option(
+        None, "--auto-start/--no-auto-start",
+        help="Automatically start required worker if not running (default: from config)"
+    ),
+    auto_stop: Optional[bool] = typer.Option(
+        None, "--auto-stop/--no-auto-stop",
+        help="Automatically stop worker after execution completes (default: from config)"
+    ),
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on",
+        help="Fail build if findings match SARIF level (error,warning,note,info,all,none). Use with --wait"
+    ),
+    export_sarif: Optional[str] = typer.Option(
+        None, "--export-sarif",
+        help="Export SARIF results to file after completion. Use with --wait"
     )
 ):
     """
     🚀 Execute a security testing workflow
+
+    Use --fail-on with --wait to fail CI builds based on finding severity.
+    Use --export-sarif with --wait to export SARIF findings to a file.
     """
     from .commands.workflow_exec import execute_workflow
 
@@ -221,7 +240,11 @@ def run_workflow(
         timeout=timeout,
         interactive=interactive,
         wait=wait,
-        live=live
+        live=live,
+        auto_start=auto_start,
+        auto_stop=auto_stop,
+        fail_on=fail_on,
+        export_sarif=export_sarif
     )
 
 @workflow_app.callback()

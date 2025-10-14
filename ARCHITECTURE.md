@@ -533,6 +533,51 @@ class S3CachedStorage:
 
 **Verdict:** 2-4 second upload overhead is **negligible** for workflows that run 5-60 minutes.
 
+### Workspace Isolation
+
+To support concurrent workflows safely, FuzzForge implements workspace isolation with three modes:
+
+**1. Isolated Mode (Default)**
+```python
+# Each workflow run gets its own workspace
+cache_path = f"/cache/{target_id}/{run_id}/workspace/"
+```
+
+- **Use for:** Fuzzing workflows that modify files (corpus, crashes)
+- **Advantages:** Safe for concurrent execution, no file conflicts
+- **Cleanup:** Entire run directory removed after workflow completes
+
+**2. Shared Mode**
+```python
+# All runs share the same workspace
+cache_path = f"/cache/{target_id}/workspace/"
+```
+
+- **Use for:** Read-only analysis workflows (security scanning, static analysis)
+- **Advantages:** Efficient (downloads once), lower bandwidth/storage
+- **Cleanup:** No cleanup (workspace persists for reuse)
+
+**3. Copy-on-Write Mode**
+```python
+# Download once to shared location, copy per run
+shared_cache = f"/cache/{target_id}/shared/workspace/"
+run_cache = f"/cache/{target_id}/{run_id}/workspace/"
+```
+
+- **Use for:** Large targets that need isolation
+- **Advantages:** Download once, isolated per-run execution
+- **Cleanup:** Run-specific copies removed, shared cache persists
+
+**Configuration:**
+
+Workflows specify isolation mode in `metadata.yaml`:
+```yaml
+name: atheris_fuzzing
+workspace_isolation: "isolated"  # or "shared" or "copy-on-write"
+```
+
+Workers automatically handle download, extraction, and cleanup based on the mode.
+
 ---
 
 ## Dynamic Workflow Loading

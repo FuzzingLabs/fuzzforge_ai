@@ -45,6 +45,7 @@ from ..constants import (
     STATUS_EMOJIS, MAX_RUN_ID_DISPLAY_LENGTH, DEFAULT_VOLUME_MODE,
     PROGRESS_STEP_DELAYS, MAX_RETRIES, RETRY_DELAY, POLL_INTERVAL
 )
+from ..worker_manager import WorkerManager
 from fuzzforge_sdk import FuzzForgeClient, WorkflowSubmission
 
 console = Console()
@@ -61,6 +62,47 @@ def get_client() -> FuzzForgeClient:
 def status_emoji(status: str) -> str:
     """Get emoji for execution status"""
     return STATUS_EMOJIS.get(status.lower(), STATUS_EMOJIS["unknown"])
+
+
+def should_fail_build(sarif_data: Dict[str, Any], fail_on: str) -> bool:
+    """
+    Check if findings warrant build failure based on SARIF severity levels.
+
+    Args:
+        sarif_data: SARIF format findings data
+        fail_on: Comma-separated SARIF levels (error,warning,note,info,all,none)
+
+    Returns:
+        True if build should fail, False otherwise
+    """
+    if fail_on == "none":
+        return False
+
+    # Parse fail_on parameter - accept SARIF levels
+    if fail_on == "all":
+        check_levels = {"error", "warning", "note", "info"}
+    else:
+        check_levels = {s.strip().lower() for s in fail_on.split(",")}
+
+    # Validate levels
+    valid_levels = {"error", "warning", "note", "info", "none"}
+    invalid = check_levels - valid_levels
+    if invalid:
+        console.print(f"⚠️  Invalid SARIF levels: {', '.join(invalid)}", style="yellow")
+        console.print("Valid levels: error, warning, note, info, all, none")
+
+    # Check SARIF results
+    runs = sarif_data.get("runs", [])
+    if not runs:
+        return False
+
+    results = runs[0].get("results", [])
+    for result in results:
+        level = result.get("level", "note")  # SARIF default is "note"
+        if level in check_levels:
+            return True
+
+    return False
 
 
 def parse_inline_parameters(params: List[str]) -> Dict[str, Any]:
@@ -263,6 +305,22 @@ def execute_workflow(
     live: bool = typer.Option(
         False, "--live", "-l",
         help="Start live monitoring after execution (useful for fuzzing workflows)"
+    ),
+    auto_start: Optional[bool] = typer.Option(
+        None, "--auto-start/--no-auto-start",
+        help="Automatically start required worker if not running (default: from config)"
+    ),
+    auto_stop: Optional[bool] = typer.Option(
+        None, "--auto-stop/--no-auto-stop",
+        help="Automatically stop worker after execution completes (default: from config)"
+    ),
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on",
+        help="Fail build if findings match severity (critical,high,medium,low,all,none). Use with --wait"
+    ),
+    export_sarif: Optional[str] = typer.Option(
+        None, "--export-sarif",
+        help="Export SARIF results to file after completion. Use with --wait"
     )
 ):
     """
@@ -270,6 +328,8 @@ def execute_workflow(
 
     Use --live for fuzzing workflows to see real-time progress.
     Use --wait to wait for completion without live dashboard.
+    Use --fail-on with --wait to fail CI builds based on finding severity.
+    Use --export-sarif with --wait to export SARIF findings to a file.
     """
     try:
         # Validate inputs
@@ -305,8 +365,54 @@ def execute_workflow(
         except Exception as e:
             handle_error(e, "parsing parameters")
 
+    # Get config for worker management settings
+    config = get_project_config() or FuzzForgeConfig()
+    should_auto_start = auto_start if auto_start is not None else config.workers.auto_start_workers
+    should_auto_stop = auto_stop if auto_stop is not None else config.workers.auto_stop_workers
+
+    worker_container = None  # Track for cleanup
+    worker_mgr = None
+    wait_completed = False  # Track if wait completed successfully
+
     try:
         with get_client() as client:
+            # Get worker information for this workflow
+            try:
+                console.print(f"🔍 Checking worker requirements for: {workflow}")
+                worker_info = client.get_workflow_worker_info(workflow)
+
+                # Initialize worker manager
+                compose_file = config.workers.docker_compose_file
+                worker_mgr = WorkerManager(
+                    compose_file=Path(compose_file) if compose_file else None,
+                    startup_timeout=config.workers.worker_startup_timeout
+                )
+
+                # Ensure worker is running
+                worker_container = worker_info["worker_container"]
+                if not worker_mgr.ensure_worker_running(worker_info, auto_start=should_auto_start):
+                    console.print(
+                        f"❌ Worker not available: {worker_info['vertical']}",
+                        style="red"
+                    )
+                    console.print(
+                        f"💡 Start the worker manually: docker-compose start {worker_container}"
+                    )
+                    raise typer.Exit(1)
+
+            except typer.Exit:
+                raise  # Re-raise Exit to preserve exit code
+            except Exception as e:
+                # If we can't get worker info, warn but continue (might be old backend)
+                console.print(
+                    f"⚠️  Could not check worker requirements: {e}",
+                    style="yellow"
+                )
+                console.print(
+                    "   Continuing without worker management...",
+                    style="yellow"
+                )
+
             response = execute_workflow_submission(
                 client, workflow, target_path, parameters,
                 volume_mode, timeout, interactive
@@ -378,17 +484,63 @@ def execute_workflow(
                         console.print(f"⚠️  Failed to update database: {e}", style="yellow")
 
                     console.print(f"🏁 Execution completed with status: {status_emoji(final_status.status)} {final_status.status}")
+                    wait_completed = True  # Mark wait as completed
 
                     if final_status.is_completed:
-                        console.print(f"💡 View findings: [bold cyan]fuzzforge findings {response.run_id}[/bold cyan]")
+                        # Export SARIF if requested
+                        if export_sarif:
+                            try:
+                                console.print(f"\n📤 Exporting SARIF results...")
+                                findings = client.get_run_findings(response.run_id)
+                                output_path = Path(export_sarif)
+                                with open(output_path, 'w') as f:
+                                    json.dump(findings.sarif, f, indent=2)
+                                console.print(f"✅ SARIF exported to: [bold cyan]{output_path}[/bold cyan]")
+                            except Exception as e:
+                                console.print(f"⚠️  Failed to export SARIF: {e}", style="yellow")
+
+                        # Check if build should fail based on findings
+                        if fail_on:
+                            try:
+                                console.print(f"\n🔍 Checking findings against severity threshold: {fail_on}")
+                                findings = client.get_run_findings(response.run_id)
+                                if should_fail_build(findings.sarif, fail_on):
+                                    console.print("❌ [bold red]Build failed: Found blocking security issues[/bold red]")
+                                    console.print(f"💡 View details: [bold cyan]fuzzforge finding {response.run_id}[/bold cyan]")
+                                    raise typer.Exit(1)
+                                else:
+                                    console.print("✅ [bold green]No blocking security issues found[/bold green]")
+                            except typer.Exit:
+                                raise  # Re-raise Exit to preserve exit code
+                            except Exception as e:
+                                console.print(f"⚠️  Failed to check findings: {e}", style="yellow")
+
+                        if not fail_on and not export_sarif:
+                            console.print(f"💡 View findings: [bold cyan]fuzzforge findings {response.run_id}[/bold cyan]")
 
                 except KeyboardInterrupt:
                     console.print(f"\n⏹️  Monitoring cancelled (execution continues in background)", style="yellow")
+                except typer.Exit:
+                    raise  # Re-raise Exit to preserve exit code
                 except Exception as e:
                     handle_error(e, "waiting for completion")
 
+    except typer.Exit:
+        raise  # Re-raise Exit to preserve exit code
     except Exception as e:
         handle_error(e, "executing workflow")
+    finally:
+        # Stop worker if auto-stop is enabled and wait completed
+        if should_auto_stop and worker_container and worker_mgr and wait_completed:
+            try:
+                console.print(f"\n🛑 Stopping worker (auto-stop enabled)...")
+                if worker_mgr.stop_worker(worker_container):
+                    console.print(f"✅ Worker stopped: {worker_container}")
+            except Exception as e:
+                console.print(
+                    f"⚠️  Failed to stop worker: {e}",
+                    style="yellow"
+                )
 
 
 @app.command("status")

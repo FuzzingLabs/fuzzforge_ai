@@ -11,6 +11,13 @@ tags:
   - "sarif"
   - "comprehensive"
 
+# Workspace isolation mode (system-level configuration)
+# - "isolated" (default): Each workflow run gets its own isolated workspace (safe for concurrent fuzzing)
+# - "shared": All runs share the same workspace (for read-only analysis workflows)
+# - "copy-on-write": Download once, copy for each run (balances performance and isolation)
+# Using "shared" mode for read-only security analysis (no file modifications)
+workspace_isolation: "shared"
+
 default_parameters:
   scanner_config: {}
   analyzer_config: {}

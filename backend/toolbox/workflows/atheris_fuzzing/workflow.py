@@ -67,11 +67,14 @@ class AtherisFuzzingWorkflow:
         }
 
         try:
+            # Get run ID for workspace isolation
+            run_id = workflow.info().run_id
+
             # Step 1: Download user's project from MinIO
             workflow.logger.info("Step 1: Downloading user code from MinIO")
             target_path = await workflow.execute_activity(
                 "get_target",
-                target_id,
+                args=[target_id, run_id, "isolated"],  # target_id, run_id, workspace_isolation
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=1),
@@ -141,7 +144,7 @@ class AtherisFuzzingWorkflow:
             try:
                 await workflow.execute_activity(
                     "cleanup_cache",
-                    target_path,
+                    args=[target_path, "isolated"],  # target_path, workspace_isolation
                     start_to_close_timeout=timedelta(minutes=1)
                 )
                 workflow.logger.info("✓ Cache cleaned up")

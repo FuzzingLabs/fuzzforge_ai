@@ -84,6 +84,34 @@ output_schema:
 
 **Important:** The `vertical` field determines which worker runs your workflow. Ensure the worker has the required tools installed.
 
+### Workspace Isolation
+
+Add the `workspace_isolation` field to control how workflow runs share or isolate workspaces:
+
+```yaml
+# Workspace isolation mode (system-level configuration)
+# - "isolated" (default): Each workflow run gets its own isolated workspace
+# - "shared": All runs share the same workspace (for read-only workflows)
+# - "copy-on-write": Download once, copy for each run
+workspace_isolation: "isolated"
+```
+
+**Choosing the right mode:**
+
+- **`isolated`** (default) - For fuzzing workflows that modify files (corpus, crashes)
+  - Example: `atheris_fuzzing`, `cargo_fuzzing`
+  - Safe for concurrent execution
+
+- **`shared`** - For read-only analysis workflows
+  - Example: `security_assessment`, `secret_detection`
+  - Efficient (downloads once, reuses cache)
+
+- **`copy-on-write`** - For large targets that need isolation
+  - Downloads once, copies per run
+  - Balances performance and isolation
+
+See the [Workspace Isolation](/concept/workspace-isolation) guide for details.
+
 ---
 
 ## Step 3: Add Live Statistics to Your Workflow 🚦
@@ -289,8 +317,15 @@ class DependencyAnalysisWorkflow:
     ) -> Dict[str, Any]:
         workflow.logger.info(f"Starting dependency analysis for target: {target_id}")
 
-        # Worker downloads target from MinIO to /cache/{target_id}
-        target_path = f"/cache/{target_id}"
+        # Get run ID for workspace isolation
+        run_id = workflow.info().run_id
+
+        # Worker downloads target from MinIO with isolation
+        target_path = await workflow.execute_activity(
+            "get_target",
+            args=[target_id, run_id, "shared"],  # target_id, run_id, workspace_isolation
+            start_to_close_timeout=timedelta(minutes=5)
+        )
 
         scanner_config = {"scan_dev_dependencies": scan_dev_dependencies}
         analyzer_config = {"vulnerability_threshold": vulnerability_threshold}
@@ -317,6 +352,13 @@ class DependencyAnalysisWorkflow:
             retry_policy=workflow.RetryPolicy(maximum_attempts=3)
         )
 
+        # Cleanup cache (respects isolation mode)
+        await workflow.execute_activity(
+            "cleanup_cache",
+            args=[target_path, "shared"],  # target_path, workspace_isolation
+            start_to_close_timeout=timedelta(minutes=1)
+        )
+
         workflow.logger.info("Dependency analysis completed")
         return sarif_report
 ```
@@ -324,9 +366,10 @@ class DependencyAnalysisWorkflow:
 **Key differences from Prefect:**
 - Use `@workflow.defn` class instead of `@flow` function
 - Use `@activity.defn` instead of `@task`
-- Activities receive `target_id` (MinIO UUID), worker downloads automatically to `/cache/{target_id}`
+- Must call `get_target` activity to download from MinIO with isolation mode
 - Use `workflow.execute_activity()` with explicit timeouts and retry policies
 - Use `workflow.logger` for logging (appears in Temporal UI)
+- Call `cleanup_cache` activity at end to clean up workspace
 
 ---
 

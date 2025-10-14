@@ -10,6 +10,12 @@ tags:
   - "libfuzzer"
   - "memory-safety"
 
+# Workspace isolation mode (system-level configuration)
+# - "isolated" (default): Each workflow run gets its own isolated workspace (safe for concurrent fuzzing)
+# - "shared": All runs share the same workspace (for read-only analysis workflows)
+# - "copy-on-write": Download once, copy for each run (balances performance and isolation)
+workspace_isolation: "isolated"
+
 default_parameters:
   target_name: null
   max_iterations: 1000000

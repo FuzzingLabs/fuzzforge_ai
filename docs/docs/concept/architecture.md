@@ -107,7 +107,11 @@ graph TB
 
 - **PostgreSQL Database:** Stores Temporal workflow state and metadata.
 - **MinIO (S3):** Persistent storage for uploaded targets and workflow results.
-- **Worker Cache:** Local filesystem cache for downloaded targets (LRU eviction).
+- **Worker Cache:** Local filesystem cache for downloaded targets with workspace isolation:
+  - **Isolated mode**: Each run gets `/cache/{target_id}/{run_id}/workspace/`
+  - **Shared mode**: All runs share `/cache/{target_id}/workspace/`
+  - **Copy-on-write mode**: Download once, copy per run
+  - **LRU eviction** when cache exceeds configured size
 
 ## How Does Data Flow Through the System?
 

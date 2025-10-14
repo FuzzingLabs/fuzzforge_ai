@@ -36,31 +36,89 @@ CACHE_MAX_SIZE_GB = int(os.getenv('CACHE_MAX_SIZE', '10').rstrip('GB'))
 
 
 @activity.defn(name="get_target")
-async def get_target_activity(target_id: str) -> str:
+async def get_target_activity(
+    target_id: str,
+    run_id: str = None,
+    workspace_isolation: str = "isolated"
+) -> str:
     """
     Download target from MinIO to local cache.
 
     Args:
         target_id: UUID of the uploaded target
+        run_id: Workflow run ID for isolation (required for isolated mode)
+        workspace_isolation: Isolation mode - "isolated" (default), "shared", or "copy-on-write"
 
     Returns:
-        Local path to the cached target file
+        Local path to the cached target workspace
 
     Raises:
         FileNotFoundError: If target doesn't exist in MinIO
+        ValueError: If run_id not provided for isolated mode
         Exception: For other download errors
     """
-    logger.info(f"Activity: get_target (target_id={target_id})")
+    logger.info(
+        f"Activity: get_target (target_id={target_id}, run_id={run_id}, "
+        f"isolation={workspace_isolation})"
+    )
 
-    # Define cache paths
-    cache_path = CACHE_DIR / target_id
-    cached_file = cache_path / "target"
+    # Validate isolation mode
+    valid_modes = ["isolated", "shared", "copy-on-write"]
+    if workspace_isolation not in valid_modes:
+        raise ValueError(
+            f"Invalid workspace_isolation mode: {workspace_isolation}. "
+            f"Must be one of: {valid_modes}"
+        )
 
-    # Check if target is already cached
-    if cached_file.exists():
+    # Require run_id for isolated and copy-on-write modes
+    if workspace_isolation in ["isolated", "copy-on-write"] and not run_id:
+        raise ValueError(
+            f"run_id is required for workspace_isolation='{workspace_isolation}'"
+        )
+
+    # Define cache paths based on isolation mode
+    if workspace_isolation == "isolated":
+        # Each run gets its own isolated workspace
+        cache_path = CACHE_DIR / target_id / run_id
+        cached_file = cache_path / "target"
+    elif workspace_isolation == "shared":
+        # All runs share the same workspace (legacy behavior)
+        cache_path = CACHE_DIR / target_id
+        cached_file = cache_path / "target"
+    else:  # copy-on-write
+        # Shared download, run-specific copy
+        shared_cache_path = CACHE_DIR / target_id / "shared"
+        cache_path = CACHE_DIR / target_id / run_id
+        cached_file = shared_cache_path / "target"
+
+    # Handle copy-on-write mode
+    if workspace_isolation == "copy-on-write":
+        # Check if shared cache exists
+        if cached_file.exists():
+            logger.info(f"Copy-on-write: Shared cache HIT for {target_id}")
+
+            # Copy shared workspace to run-specific path
+            shared_workspace = shared_cache_path / "workspace"
+            run_workspace = cache_path / "workspace"
+
+            if shared_workspace.exists():
+                logger.info(f"Copying workspace to isolated run path: {run_workspace}")
+                cache_path.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(shared_workspace, run_workspace)
+                return str(run_workspace)
+            else:
+                # Shared file exists but not extracted (non-tarball)
+                run_file = cache_path / "target"
+                cache_path.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cached_file, run_file)
+                return str(run_file)
+        # If shared cache doesn't exist, fall through to download
+
+    # Check if target is already cached (isolated or shared mode)
+    elif cached_file.exists():
         # Update access time for LRU
         cached_file.touch()
-        logger.info(f"Cache HIT: {target_id}")
+        logger.info(f"Cache HIT: {target_id} (mode: {workspace_isolation})")
 
         # Check if workspace directory exists (extracted tarball)
         workspace_dir = cache_path / "workspace"
@@ -72,7 +130,10 @@ async def get_target_activity(target_id: str) -> str:
             return str(cached_file)
 
     # Cache miss - download from MinIO
-    logger.info(f"Cache MISS: {target_id}, downloading from MinIO...")
+    logger.info(
+        f"Cache MISS: {target_id} (mode: {workspace_isolation}), "
+        f"downloading from MinIO..."
+    )
 
     try:
         # Create cache directory
@@ -110,9 +171,28 @@ async def get_target_activity(target_id: str) -> str:
                 tar.extractall(path=workspace_dir)
 
             logger.info(f"✓ Extracted tarball to {workspace_dir}")
+
+            # For copy-on-write mode, copy to run-specific path
+            if workspace_isolation == "copy-on-write":
+                run_cache_path = CACHE_DIR / target_id / run_id
+                run_workspace = run_cache_path / "workspace"
+                logger.info(f"Copy-on-write: Copying to {run_workspace}")
+                run_cache_path.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(workspace_dir, run_workspace)
+                return str(run_workspace)
+
             return str(workspace_dir)
         else:
-            # Not a tarball, return file path
+            # Not a tarball
+            if workspace_isolation == "copy-on-write":
+                # Copy file to run-specific path
+                run_cache_path = CACHE_DIR / target_id / run_id
+                run_file = run_cache_path / "target"
+                logger.info(f"Copy-on-write: Copying file to {run_file}")
+                run_cache_path.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cached_file, run_file)
+                return str(run_file)
+
             return str(cached_file)
 
     except ClientError as e:
@@ -133,28 +213,71 @@ async def get_target_activity(target_id: str) -> str:
 
 
 @activity.defn(name="cleanup_cache")
-async def cleanup_cache_activity(target_path: str) -> None:
+async def cleanup_cache_activity(
+    target_path: str,
+    workspace_isolation: str = "isolated"
+) -> None:
     """
     Remove target from local cache after workflow completes.
 
     Args:
-        target_path: Path to the cached target file (from get_target_activity)
+        target_path: Path to the cached target workspace (from get_target_activity)
+        workspace_isolation: Isolation mode used - determines cleanup scope
+
+    Notes:
+        - "isolated" mode: Removes the entire run-specific directory
+        - "copy-on-write" mode: Removes run-specific directory, keeps shared cache
+        - "shared" mode: Does NOT remove cache (shared across runs)
     """
-    logger.info(f"Activity: cleanup_cache (path={target_path})")
+    logger.info(
+        f"Activity: cleanup_cache (path={target_path}, "
+        f"isolation={workspace_isolation})"
+    )
 
     try:
-        cache_file = Path(target_path)
-        cache_dir = cache_file.parent
+        target = Path(target_path)
 
-        if cache_dir.exists() and cache_dir.is_relative_to(CACHE_DIR):
-            shutil.rmtree(cache_dir)
-            logger.info(f"✓ Cleaned up cache: {cache_dir}")
+        # For shared mode, don't clean up (cache is shared across runs)
+        if workspace_isolation == "shared":
+            logger.info(
+                f"Skipping cleanup for shared workspace (mode={workspace_isolation})"
+            )
+            return
+
+        # For isolated and copy-on-write modes, clean up run-specific directory
+        # Navigate up to the run-specific directory: /cache/{target_id}/{run_id}/
+        if target.name == "workspace":
+            # Path is .../workspace, go up one level to run directory
+            run_dir = target.parent
         else:
-            logger.warning(f"Cache path not in CACHE_DIR or doesn't exist: {cache_dir}")
+            # Path is a file, go up one level to run directory
+            run_dir = target.parent
+
+        # Validate it's in cache and looks like a run-specific path
+        if run_dir.exists() and run_dir.is_relative_to(CACHE_DIR):
+            # Check if parent is target_id directory (validate structure)
+            target_id_dir = run_dir.parent
+            if target_id_dir.is_relative_to(CACHE_DIR):
+                shutil.rmtree(run_dir)
+                logger.info(
+                    f"✓ Cleaned up run-specific directory: {run_dir} "
+                    f"(mode={workspace_isolation})"
+                )
+            else:
+                logger.warning(
+                    f"Unexpected cache structure, skipping cleanup: {run_dir}"
+                )
+        else:
+            logger.warning(
+                f"Cache path not in CACHE_DIR or doesn't exist: {run_dir}"
+            )
 
     except Exception as e:
         # Don't fail workflow if cleanup fails
-        logger.error(f"Failed to cleanup cache {target_path}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to cleanup cache {target_path}: {e}",
+            exc_info=True
+        )
 
 
 @activity.defn(name="upload_results")

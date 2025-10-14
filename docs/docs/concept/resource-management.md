@@ -14,6 +14,114 @@ Resource limiting in FuzzForge operates at three levels:
 
 ---
 
+## Worker Lifecycle Management (On-Demand Startup)
+
+**New in v0.7.0**: Workers now support on-demand startup/shutdown for optimal resource usage.
+
+### Architecture
+
+Workers are **pre-built** but **not auto-started**:
+
+```
+┌─────────────┐
+│ docker-     │  Pre-built worker images
+│ compose     │  with profiles: ["workers", "ossfuzz"]
+│ build       │  restart: "no"
+└─────────────┘
+       ↓
+┌─────────────┐
+│ Workers     │  Status: Exited (not running)
+│ Pre-built   │  RAM Usage: 0 MB
+└─────────────┘
+       ↓
+┌─────────────┐
+│ ff workflow │  CLI detects required worker
+│ run         │  via /workflows/{name}/worker-info API
+└─────────────┘
+       ↓
+┌─────────────┐
+│ docker      │  docker start fuzzforge-worker-ossfuzz
+│ start       │  Wait for healthy status
+└─────────────┘
+       ↓
+┌─────────────┐
+│ Worker      │  Status: Up
+│ Running     │  RAM Usage: ~1-2 GB
+└─────────────┘
+```
+
+### Resource Savings
+
+| State | Services Running | RAM Usage |
+|-------|-----------------|-----------|
+| **Idle** (no workflows) | Temporal, PostgreSQL, MinIO, Backend | ~1.2 GB |
+| **Active** (1 workflow) | Core + 1 worker | ~3-5 GB |
+| **Legacy** (all workers) | Core + all 5 workers | ~8 GB |
+
+**Savings: ~6-7GB RAM when idle** ✨
+
+### Configuration
+
+Control via `.fuzzforge/config.yaml`:
+
+```yaml
+workers:
+  auto_start_workers: true    # Auto-start when needed
+  auto_stop_workers: false    # Auto-stop after completion
+  worker_startup_timeout: 60  # Startup timeout (seconds)
+  docker_compose_file: null   # Custom compose file path
+```
+
+Or via CLI flags:
+
+```bash
+# Auto-start disabled
+ff workflow run ossfuzz_campaign . --no-auto-start
+
+# Auto-stop enabled
+ff workflow run ossfuzz_campaign . --wait --auto-stop
+```
+
+### Backend API
+
+New endpoint: `GET /workflows/{workflow_name}/worker-info`
+
+**Response**:
+```json
+{
+  "workflow": "ossfuzz_campaign",
+  "vertical": "ossfuzz",
+  "worker_container": "fuzzforge-worker-ossfuzz",
+  "task_queue": "ossfuzz-queue",
+  "required": true
+}
+```
+
+### SDK Integration
+
+```python
+from fuzzforge_sdk import FuzzForgeClient
+
+client = FuzzForgeClient()
+worker_info = client.get_workflow_worker_info("ossfuzz_campaign")
+# Returns: {"vertical": "ossfuzz", "worker_container": "fuzzforge-worker-ossfuzz", ...}
+```
+
+### Manual Control
+
+```bash
+# Start worker manually
+docker start fuzzforge-worker-ossfuzz
+
+# Stop worker manually
+docker stop fuzzforge-worker-ossfuzz
+
+# Check all worker statuses
+docker ps -a --filter "name=fuzzforge-worker"
+```
+
+---
+
 ## Level 1: Docker Container Limits (Primary)
 
 Docker container limits are the **primary enforcement mechanism** for CPU and memory resources. These are configured in `docker-compose.temporal.yaml` and enforced by the Docker runtime.
@@ -378,6 +486,87 @@ requirements:
 
 ---
 
+## Workspace Isolation and Cache Management
+
+FuzzForge uses workspace isolation to prevent concurrent workflows from interfering with each other. Each workflow run can have its own isolated workspace or share a common workspace based on the isolation mode.
+
+### Cache Directory Structure
+
+Workers cache downloaded targets locally to avoid repeated downloads:
+
+```
+/cache/
+├── {target_id_1}/
+│   ├── {run_id_1}/        # Isolated mode
+│   │   ├── target         # Downloaded tarball
+│   │   └── workspace/     # Extracted files
+│   ├── {run_id_2}/
+│   │   ├── target
+│   │   └── workspace/
+│   └── workspace/         # Shared mode (no run_id)
+│       └── ...
+├── {target_id_2}/
+│   └── shared/            # Copy-on-write shared download
+│       ├── target
+│       └── workspace/
+```
+
+### Isolation Modes
+
+**Isolated Mode** (default for fuzzing):
+- Each run gets `/cache/{target_id}/{run_id}/workspace/`
+- Safe for concurrent execution
+- Cleanup removes entire run directory
+
+**Shared Mode** (for read-only workflows):
+- All runs share `/cache/{target_id}/workspace/`
+- Efficient (downloads once)
+- No cleanup (cache persists)
+
+**Copy-on-Write Mode**:
+- Downloads to `/cache/{target_id}/shared/`
+- Copies to `/cache/{target_id}/{run_id}/` per run
+- Balances performance and isolation
+
+### Cache Limits
+
+Configure cache limits via environment variables:
+
+```yaml
+worker-rust:
+  environment:
+    CACHE_DIR: /cache
+    CACHE_MAX_SIZE: 10GB    # Maximum cache size before LRU eviction
+    CACHE_TTL: 7d           # Time-to-live for cached files
+```
+
+### LRU Eviction
+
+When cache exceeds `CACHE_MAX_SIZE`, the least-recently-used files are automatically evicted:
+
+1. Worker tracks last access time for each cached target
+2. When cache is full, oldest accessed files are removed first
+3. Eviction runs periodically (every 30 minutes)
+
+### Monitoring Cache Usage
+
+Check cache size and cleanup logs:
+
+```bash
+# Check cache size
+docker exec fuzzforge-worker-rust du -sh /cache
+
+# Monitor cache evictions
+docker-compose -f docker-compose.temporal.yaml logs worker-rust | grep "Evicted from cache"
+
+# Check download vs cache hit rate
+docker-compose -f docker-compose.temporal.yaml logs worker-rust | grep -E "Cache (HIT|MISS)"
+```
+
+See the [Workspace Isolation](/concept/workspace-isolation) guide for complete details on isolation modes and when to use each.
+
+---
+
 ## Summary
 
 FuzzForge's resource management strategy:
@@ -385,6 +574,7 @@ FuzzForge's resource management strategy:
 1. **Docker Container Limits**: Primary enforcement (CPU/memory hard limits)
 2. **Concurrency Limits**: Controls parallel workflows per worker
 3. **Workflow Metadata**: Advisory resource hints + enforced timeout
+4. **Workspace Isolation**: Controls cache sharing and cleanup behavior
 
 **Key Takeaways:**
 - Set conservative Docker limits and adjust based on monitoring
@@ -392,6 +582,8 @@ FuzzForge's resource management strategy:
 - Use `docker stats` and Temporal UI to monitor resource usage
 - Scale horizontally by adding more worker instances
 - Set realistic timeouts based on actual workflow duration
+- Choose appropriate isolation mode (isolated for fuzzing, shared for analysis)
+- Monitor cache usage and adjust `CACHE_MAX_SIZE` as needed
 
 ---
 

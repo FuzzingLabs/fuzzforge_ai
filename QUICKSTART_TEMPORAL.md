@@ -5,30 +5,34 @@ This guide walks you through starting and testing the new Temporal-based archite
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- At least 4GB free RAM
-- Ports available: 7233, 8233, 9000, 9001
+- At least 2GB free RAM (core services only, workers start on-demand)
+- Ports available: 7233, 8233, 9000, 9001, 8000
 
-## Step 1: Start Services
+## Step 1: Start Core Services
 
 ```bash
 # From project root
 cd /path/to/fuzzforge_ai
 
-# Start all services
-docker-compose -f docker-compose.temporal.yaml up -d
+# Start core services (Temporal, MinIO, Backend)
+docker-compose up -d
+
+# Workers are pre-built but don't auto-start (saves ~6-7GB RAM)
+# They'll start automatically when workflows need them
 
 # Check status
-docker-compose -f docker-compose.temporal.yaml ps
+docker-compose ps
 ```
 
 **Expected output:**
 ```
 NAME                          STATUS    PORTS
 fuzzforge-minio               healthy   0.0.0.0:9000-9001->9000-9001/tcp
-fuzzforge-temporal            healthy   0.0.0.0:7233->7233/tcp, 0.0.0.0:8233->8233/tcp
-fuzzforge-temporal-db         healthy   5432/tcp
-fuzzforge-worker-rust         running
+fuzzforge-temporal            healthy   0.0.0.0:7233->7233/tcp
+fuzzforge-temporal-postgresql healthy   5432/tcp
+fuzzforge-backend             healthy   0.0.0.0:8000->8000/tcp
 fuzzforge-minio-setup         exited (0)
+# Workers NOT running (will start on-demand)
 ```
 
 **First startup takes ~30-60 seconds** for health checks to pass.
@@ -65,6 +69,38 @@ Creating worker on task queue: rust-queue
 📨 Listening on task queue: rust-queue
 ============================================================
 Worker is ready to process tasks...
+```
+
+## Step 2.5: Worker Lifecycle Management (New in v0.7.0)
+
+Workers start on-demand when workflows need them:
+
+```bash
+# Check worker status (should show Exited or not running)
+docker ps -a --filter "name=fuzzforge-worker"
+
+# Run a workflow - worker starts automatically
+ff workflow run ossfuzz_campaign . project_name=zlib
+
+# Worker is now running
+docker ps --filter "name=fuzzforge-worker-ossfuzz"
+```
+
+**Configuration** (`.fuzzforge/config.yaml`):
+```yaml
+workers:
+  auto_start_workers: true    # Default: auto-start
+  auto_stop_workers: false    # Default: keep running
+  worker_startup_timeout: 60  # Startup timeout in seconds
+```
+
+**CLI Control**:
+```bash
+# Disable auto-start
+ff workflow run ossfuzz_campaign . --no-auto-start
+
+# Enable auto-stop after completion
+ff workflow run ossfuzz_campaign . --wait --auto-stop
 ```
 
 ## Step 3: Access Web UIs

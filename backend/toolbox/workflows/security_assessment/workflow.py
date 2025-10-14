@@ -99,11 +99,14 @@ class SecurityAssessmentWorkflow:
         }
 
         try:
+            # Get run ID for workspace isolation (using shared mode for read-only analysis)
+            run_id = workflow.info().run_id
+
             # Step 1: Download target from MinIO
             workflow.logger.info("Step 1: Downloading target from MinIO")
             target_path = await workflow.execute_activity(
                 "get_target",
-                target_id,
+                args=[target_id, run_id, "shared"],  # target_id, run_id, workspace_isolation
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=RetryPolicy(
                     initial_interval=timedelta(seconds=1),
@@ -200,10 +203,10 @@ class SecurityAssessmentWorkflow:
             try:
                 await workflow.execute_activity(
                     "cleanup_cache",
-                    target_path,
+                    args=[target_path, "shared"],  # target_path, workspace_isolation
                     start_to_close_timeout=timedelta(minutes=1)
                 )
-                workflow.logger.info("✓ Cache cleaned up")
+                workflow.logger.info("✓ Cache cleaned up (skipped for shared mode)")
             except Exception as e:
                 workflow.logger.warning(f"Cache cleanup failed: {e}")
 

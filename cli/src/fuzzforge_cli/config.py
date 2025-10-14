@@ -66,6 +66,15 @@ class PreferencesConfig(BaseModel):
     color_output: bool = True
 
 
+class WorkerConfig(BaseModel):
+    """Worker lifecycle management configuration."""
+
+    auto_start_workers: bool = True
+    auto_stop_workers: bool = False
+    worker_startup_timeout: int = 60
+    docker_compose_file: Optional[str] = None
+
+
 class CogneeConfig(BaseModel):
     """Cognee integration metadata."""
 
@@ -84,6 +93,7 @@ class FuzzForgeConfig(BaseModel):
     project: ProjectConfig = Field(default_factory=ProjectConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     preferences: PreferencesConfig = Field(default_factory=PreferencesConfig)
+    workers: WorkerConfig = Field(default_factory=WorkerConfig)
     cognee: CogneeConfig = Field(default_factory=CogneeConfig)
 
     @classmethod

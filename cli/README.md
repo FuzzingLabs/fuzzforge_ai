@@ -224,6 +224,22 @@ $ ff workflow security_assessment ./my-project
 - `--wait, -w` - Wait for execution to complete
 - `--live, -l` - Show live monitoring during execution
 
+**Worker Lifecycle Options (v0.7.0):**
+- `--auto-start/--no-auto-start` - Auto-start required worker (default: from config)
+- `--auto-stop/--no-auto-stop` - Auto-stop worker after completion (default: from config)
+
+**Examples:**
+```bash
+# Worker starts automatically (default behavior)
+fuzzforge workflow ossfuzz_campaign . project_name=zlib
+
+# Disable auto-start (worker must be running already)
+fuzzforge workflow ossfuzz_campaign . --no-auto-start
+
+# Auto-stop worker after completion
+fuzzforge workflow ossfuzz_campaign . --wait --auto-stop
+```
+
 #### `fuzzforge workflow status [execution-id]`
 Check the status of a workflow execution.
 
@@ -445,6 +461,12 @@ preferences:
   show_progress_bars: true
   table_style: "rich"
   color_output: true
+
+workers:
+  auto_start_workers: true    # Auto-start workers when needed
+  auto_stop_workers: false    # Auto-stop workers after completion
+  worker_startup_timeout: 60  # Worker startup timeout (seconds)
+  docker_compose_file: null   # Custom docker-compose.yml path
 ```
 
 ## 🔧 Advanced Usage

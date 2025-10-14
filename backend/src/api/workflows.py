@@ -506,6 +506,72 @@ async def upload_and_submit_workflow(
                 logger.warning(f"Failed to cleanup temp file {temp_file_path}: {e}")
 
 
+@router.get("/{workflow_name}/worker-info")
+async def get_workflow_worker_info(
+    workflow_name: str,
+    temporal_mgr=Depends(get_temporal_manager)
+) -> Dict[str, Any]:
+    """
+    Get worker information for a workflow.
+
+    Returns details about which worker is required to execute this workflow,
+    including container name, task queue, and vertical.
+
+    Args:
+        workflow_name: Name of the workflow
+
+    Returns:
+        Worker information including vertical, container name, and task queue
+
+    Raises:
+        HTTPException: 404 if workflow not found
+    """
+    if workflow_name not in temporal_mgr.workflows:
+        available_workflows = list(temporal_mgr.workflows.keys())
+        error_response = create_structured_error_response(
+            error_type="WorkflowNotFound",
+            message=f"Workflow '{workflow_name}' not found",
+            workflow_name=workflow_name,
+            suggestions=[
+                f"Available workflows: {', '.join(available_workflows)}",
+                "Use GET /workflows/ to see all available workflows"
+            ]
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=error_response
+        )
+
+    info = temporal_mgr.workflows[workflow_name]
+    metadata = info.metadata
+
+    # Extract vertical from metadata
+    vertical = metadata.get("vertical")
+
+    if not vertical:
+        error_response = create_structured_error_response(
+            error_type="MissingVertical",
+            message=f"Workflow '{workflow_name}' does not specify a vertical in metadata",
+            workflow_name=workflow_name,
+            suggestions=[
+                "Check workflow metadata.yaml for 'vertical' field",
+                "Contact workflow author for support"
+            ]
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=error_response
+        )
+
+    return {
+        "workflow": workflow_name,
+        "vertical": vertical,
+        "worker_container": f"fuzzforge-worker-{vertical}",
+        "task_queue": f"{vertical}-queue",
+        "required": True
+    }
+
+
 @router.get("/{workflow_name}/parameters")
 async def get_workflow_parameters(
     workflow_name: str,

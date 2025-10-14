@@ -72,7 +72,9 @@ cp workers/rust/requirements.txt workers/my_vertical/
 
 **Note**: The worker.py and activities.py are generic and work for all verticals. You only need to customize the Dockerfile with your tools.
 
-### Step 4: Add to docker-compose.temporal.yaml
+### Step 4: Add to docker-compose.yml
+
+Add profiles to prevent auto-start:
 
 ```yaml
 worker-my-vertical:
@@ -80,6 +82,9 @@ worker-my-vertical:
     context: ./workers/my_vertical
     dockerfile: Dockerfile
   container_name: fuzzforge-worker-my-vertical
+  profiles:          # ← Prevents auto-start (saves RAM)
+    - workers
+    - my_vertical
   depends_on:
     temporal:
       condition: service_healthy
@@ -102,8 +107,10 @@ worker-my-vertical:
     - worker_my_vertical_cache:/cache
   networks:
     - fuzzforge-network
-  restart: unless-stopped
+  restart: "no"      # ← Don't auto-restart
 ```
+
+**Why profiles?** Workers are pre-built but don't auto-start, saving ~1-2GB RAM per worker when idle.
 
 ### Step 5: Add Volume
 
@@ -295,6 +302,49 @@ await workflow.execute_activity(
 4. **Log liberally**: Helps debugging workflow issues
 5. **Handle errors gracefully**: Don't fail workflow for non-critical issues
 6. **Test locally first**: Use docker-compose before deploying
+
+## On-Demand Worker Management
+
+Workers use Docker Compose profiles and CLI-managed lifecycle for resource optimization.
+
+### How It Works
+
+1. **Build Time**: `docker-compose build` creates all worker images
+2. **Startup**: Workers DON'T auto-start with `docker-compose up -d`
+3. **On Demand**: CLI starts workers automatically when workflows need them
+4. **Shutdown**: Optional auto-stop after workflow completion
+
+### Manual Control
+
+```bash
+# Start specific worker
+docker start fuzzforge-worker-ossfuzz
+
+# Stop specific worker
+docker stop fuzzforge-worker-ossfuzz
+
+# Check worker status
+docker ps --filter "name=fuzzforge-worker"
+```
+
+### CLI Auto-Management
+
+```bash
+# Auto-start enabled by default
+ff workflow run ossfuzz_campaign . project_name=zlib
+
+# Disable auto-start
+ff workflow run ossfuzz_campaign . project_name=zlib --no-auto-start
+
+# Auto-stop after completion
+ff workflow run ossfuzz_campaign . project_name=zlib --wait --auto-stop
+```
+
+### Resource Savings
+
+- **Before**: All workers running = ~8GB RAM
+- **After**: Only core services running = ~1.2GB RAM
+- **Savings**: ~6-7GB RAM when idle
 
 ## Examples
 

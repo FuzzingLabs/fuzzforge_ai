@@ -156,6 +156,9 @@ services:
       context: ./workers/rust
       dockerfile: Dockerfile
     container_name: fuzzforge-worker-rust
+    profiles:
+      - workers
+      - rust
     depends_on:
       postgresql:
         condition: service_healthy
@@ -197,7 +200,7 @@ services:
       - worker_rust_cache:/cache
     networks:
       - fuzzforge-network
-    restart: unless-stopped
+    restart: "no"
     # Resource limits (adjust based on vertical needs)
     deploy:
       resources:
@@ -216,6 +219,9 @@ services:
       context: ./workers/python
       dockerfile: Dockerfile
     container_name: fuzzforge-worker-python
+    profiles:
+      - workers
+      - python
     depends_on:
       postgresql:
         condition: service_healthy
@@ -257,7 +263,7 @@ services:
       - worker_python_cache:/cache
     networks:
       - fuzzforge-network
-    restart: unless-stopped
+    restart: "no"
     # Resource limits (lighter than rust)
     deploy:
       resources:
@@ -276,6 +282,9 @@ services:
       context: ./workers/secrets
       dockerfile: Dockerfile
     container_name: fuzzforge-worker-secrets
+    profiles:
+      - workers
+      - secrets
     depends_on:
       postgresql:
         condition: service_healthy
@@ -317,7 +326,7 @@ services:
       - worker_secrets_cache:/cache
     networks:
       - fuzzforge-network
-    restart: unless-stopped
+    restart: "no"
     # Resource limits (lighter than rust)
     deploy:
       resources:
@@ -336,6 +345,10 @@ services:
       context: ./workers/android
       dockerfile: Dockerfile
     container_name: fuzzforge-worker-android
+    profiles:
+      - workers
+      - android
+      - full
     depends_on:
       postgresql:
         condition: service_healthy
@@ -377,7 +390,7 @@ services:
       - worker_android_cache:/cache
     networks:
       - fuzzforge-network
-    restart: unless-stopped
+    restart: "no"
     # Resource limits (Android tools need more memory)
     deploy:
       resources:
@@ -387,8 +400,6 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
-    profiles:
-      - full  # Only start with --profile full (optional for testing)
 
   # ============================================================================
   # FuzzForge Backend API
@@ -437,6 +448,71 @@ services:
       timeout: 10s
       retries: 3
 
+  # ============================================================================
+  # Vertical Worker: OSS-Fuzz Campaigns
+  # ============================================================================
+  worker-ossfuzz:
+    build:
+      context: ./workers/ossfuzz
+      dockerfile: Dockerfile
+    container_name: fuzzforge-worker-ossfuzz
+    profiles:
+      - workers
+      - ossfuzz
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # Temporal configuration
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+
+      # Worker configuration
+      WORKER_VERTICAL: ossfuzz
+      WORKER_TASK_QUEUE: ossfuzz-queue
+      MAX_CONCURRENT_ACTIVITIES: 2  # Lower concurrency for resource-intensive fuzzing
+
+      # Storage configuration (MinIO)
+      STORAGE_BACKEND: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: fuzzforge
+      S3_SECRET_KEY: fuzzforge123
+      S3_BUCKET: targets
+      S3_REGION: us-east-1
+      S3_USE_SSL: "false"
+
+      # Cache configuration (larger for OSS-Fuzz builds)
+      CACHE_DIR: /cache
+      CACHE_MAX_SIZE: 50GB
+      CACHE_TTL: 30d
+
+      # Logging
+      LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: 1
+    volumes:
+      # Mount workflow code (read-only) for dynamic discovery
+      - ./backend/toolbox:/app/toolbox:ro
+      # Worker cache for OSS-Fuzz builds and corpus
+      - worker_ossfuzz_cache:/cache
+      # OSS-Fuzz build output
+      - worker_ossfuzz_build:/opt/oss-fuzz/build
+    networks:
+      - fuzzforge-network
+    restart: "no"
+    # Higher resource limits for fuzzing campaigns
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 2G
+
 # ============================================================================
 # Volumes
 # ============================================================================
@@ -455,6 +531,10 @@ volumes:
     name: fuzzforge_worker_secrets_cache
   worker_android_cache:
     name: fuzzforge_worker_android_cache
+  worker_ossfuzz_cache:
+    name: fuzzforge_worker_ossfuzz_cache
+  worker_ossfuzz_build:
+    name: fuzzforge_worker_ossfuzz_build
   # Add more worker caches as you add verticals:
   # worker_web_cache:
   # worker_ios_cache:
