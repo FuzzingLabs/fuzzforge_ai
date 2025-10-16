@@ -27,9 +27,14 @@ app = typer.Typer(name="ai", help="Interact with the FuzzForge AI system")
 @app.command("agent")
 def ai_agent() -> None:
     """Launch the full AI agent CLI with A2A orchestration."""
-    console.print("[yellow]⚠️  The AI agent command is temporarily deactivated[/yellow]")
-    console.print("[dim]This feature is undergoing maintenance and will be re-enabled soon.[/dim]")
-    raise typer.Exit(0)
+    console.print("[cyan]🤖 Opening Project FuzzForge AI Agent session[/cyan]\n")
+    try:
+        from fuzzforge_ai.cli import FuzzForgeCLI
+        cli = FuzzForgeCLI()
+        asyncio.run(cli.run())
+    except ImportError as exc:
+        console.print(f"[red]Failed to import AI CLI:[/red] {exc}")
+        raise typer.Exit(1) from exc
 
 
 # Memory + health commands
