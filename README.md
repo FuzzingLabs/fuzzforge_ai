@@ -67,6 +67,23 @@ If you find FuzzForge useful, please star the repo to support development 🚀
 
 ---
 
+## 🔍 Secret Detection Benchmarks
+
+FuzzForge includes three secret detection workflows benchmarked on a controlled dataset of **32 documented secrets** (12 Easy, 10 Medium, 10 Hard):
+
+| Tool | Recall | Secrets Found | Speed |
+|------|--------|---------------|-------|
+| **LLM (gpt-5-mini)** | **84.4%** | 41 | 618s |
+| **LLM (gpt-4o-mini)** | 56.2% | 30 | 297s |
+| **Gitleaks** | 37.5% | 12 | 5s |
+| **TruffleHog** | 0.0% | 1 | 5s |
+
+📊 [Full benchmark results and analysis](backend/benchmarks/by_category/secret_detection/results/comparison_report.md)
+
+The LLM-based detector excels at finding obfuscated and hidden secrets through semantic analysis, while pattern-based tools (Gitleaks) offer speed for standard secret formats.
+
+---
+
 ## 📦 Installation
 
 ### Requirements
