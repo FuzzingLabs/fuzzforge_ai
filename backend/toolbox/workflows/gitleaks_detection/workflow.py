@@ -16,7 +16,7 @@ Scans code for secrets and credentials using Gitleaks.
 # Additional attribution and requirements are provided in the NOTICE file.
 
 from datetime import timedelta
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy

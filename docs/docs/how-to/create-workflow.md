@@ -110,7 +110,7 @@ workspace_isolation: "isolated"
   - Downloads once, copies per run
   - Balances performance and isolation
 
-See the [Workspace Isolation](/concept/workspace-isolation) guide for details.
+See the [Workspace Isolation](/docs/concept/workspace-isolation) guide for details.
 
 ---
 

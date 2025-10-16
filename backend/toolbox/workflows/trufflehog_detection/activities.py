@@ -1,6 +1,5 @@
 """TruffleHog Detection Workflow Activities"""
 
-import logging
 from pathlib import Path
 from typing import Dict, Any
 from temporalio import activity

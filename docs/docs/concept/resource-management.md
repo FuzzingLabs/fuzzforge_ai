@@ -563,7 +563,7 @@ docker-compose -f docker-compose.temporal.yaml logs worker-rust | grep "Evicted 
 docker-compose -f docker-compose.temporal.yaml logs worker-rust | grep -E "Cache (HIT|MISS)"
 ```
 
-See the [Workspace Isolation](/concept/workspace-isolation) guide for complete details on isolation modes and when to use each.
+See the [Workspace Isolation](/docs/concept/workspace-isolation) guide for complete details on isolation modes and when to use each.
 
 ---
 
