@@ -248,7 +248,8 @@ class GitleaksModule(BaseModule):
                 rule_id = result.get("RuleID", "unknown")
                 description = result.get("Description", "")
                 file_path = result.get("File", "")
-                line_number = result.get("LineNumber", 0)
+                line_number = result.get("StartLine", 0)  # Gitleaks outputs "StartLine", not "LineNumber"
+                line_end = result.get("EndLine", 0)
                 secret = result.get("Secret", "")
                 match_text = result.get("Match", "")
 
@@ -278,6 +279,7 @@ class GitleaksModule(BaseModule):
                     category="secret_leak",
                     file_path=file_path if file_path else None,
                     line_start=line_number if line_number > 0 else None,
+                    line_end=line_end if line_end > 0 else None,
                     code_snippet=match_text if match_text else secret,
                     recommendation=self._get_leak_recommendation(rule_id),
                     metadata={

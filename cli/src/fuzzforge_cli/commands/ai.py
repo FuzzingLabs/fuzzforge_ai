@@ -27,21 +27,9 @@ app = typer.Typer(name="ai", help="Interact with the FuzzForge AI system")
 @app.command("agent")
 def ai_agent() -> None:
     """Launch the full AI agent CLI with A2A orchestration."""
-    console.print("[cyan]🤖 Opening Project FuzzForge AI Agent session[/cyan]\n")
-
-    try:
-        from fuzzforge_ai.cli import FuzzForgeCLI
-
-        cli = FuzzForgeCLI()
-        asyncio.run(cli.run())
-    except ImportError as exc:
-        console.print(f"[red]Failed to import AI CLI:[/red] {exc}")
-        console.print("[dim]Ensure AI dependencies are installed (pip install -e .)[/dim]")
-        raise typer.Exit(1) from exc
-    except Exception as exc:  # pragma: no cover - runtime safety
-        console.print(f"[red]Failed to launch AI agent:[/red] {exc}")
-        console.print("[dim]Check that .env contains LITELLM_MODEL and API keys[/dim]")
-        raise typer.Exit(1) from exc
+    console.print("[yellow]⚠️  The AI agent command is temporarily deactivated[/yellow]")
+    console.print("[dim]This feature is undergoing maintenance and will be re-enabled soon.[/dim]")
+    raise typer.Exit(0)
 
 
 # Memory + health commands

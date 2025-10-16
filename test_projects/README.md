@@ -1,6 +1,6 @@
 # FuzzForge Vulnerable Test Project
 
-This directory contains a comprehensive vulnerable test application designed to validate FuzzForge's security workflows. The project contains multiple categories of security vulnerabilities to test both the `security_assessment` and `secret_detection_scan` workflows.
+This directory contains a comprehensive vulnerable test application designed to validate FuzzForge's security workflows. The project contains multiple categories of security vulnerabilities to test `security_assessment`, `gitleaks_detection`, `trufflehog_detection`, and `llm_secret_detection` workflows.
 
 ## Test Project Overview
 
@@ -9,7 +9,9 @@ This directory contains a comprehensive vulnerable test application designed to 
 
 **Supported Workflows**:
 - `security_assessment` - General security scanning and analysis
-- `secret_detection_scan` - Detection of secrets, credentials, and sensitive data
+- `gitleaks_detection` - Pattern-based secret detection
+- `trufflehog_detection` - Entropy-based secret detection with verification
+- `llm_secret_detection` - AI-powered semantic secret detection
 
 **Vulnerabilities Included**:
 - SQL injection vulnerabilities
@@ -38,7 +40,7 @@ This directory contains a comprehensive vulnerable test application designed to 
 
 ### Testing with FuzzForge Workflows
 
-The vulnerable application can be tested with both essential workflows:
+The vulnerable application can be tested with multiple security workflows:
 
 ```bash
 # Test security assessment workflow
@@ -49,8 +51,16 @@ curl -X POST http://localhost:8000/workflows/security_assessment/submit \
     "volume_mode": "ro"
   }'
 
-# Test secret detection workflow
-curl -X POST http://localhost:8000/workflows/secret_detection_scan/submit \
+# Test Gitleaks secret detection workflow
+curl -X POST http://localhost:8000/workflows/gitleaks_detection/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target_path": "/path/to/test_projects/vulnerable_app",
+    "volume_mode": "ro"
+  }'
+
+# Test TruffleHog secret detection workflow
+curl -X POST http://localhost:8000/workflows/trufflehog_detection/submit \
   -H "Content-Type: application/json" \
   -d '{
     "target_path": "/path/to/test_projects/vulnerable_app",
@@ -70,7 +80,9 @@ Each workflow should produce SARIF-formatted results with:
 
 A successful test should detect:
 - **Security Assessment**: At least 20 various security vulnerabilities
-- **Secret Detection**: At least 10 different types of secrets and credentials
+- **Gitleaks Detection**: At least 10 different types of secrets
+- **TruffleHog Detection**: At least 5 high-entropy secrets
+- **LLM Secret Detection**: At least 15 secrets with semantic understanding
 
 ---
 

@@ -204,6 +204,7 @@ dev_config.yaml
 reports/
 output/
 findings/
+*.sarif
 *.sarif.json
 *.html.report
 security_report.*
@@ -292,3 +293,4 @@ test_projects/*/.npmrc
 test_projects/*/.git-credentials
 test_projects/*/credentials.*
 test_projects/*/api_keys.*
+test_projects/*/ci-*.sh
