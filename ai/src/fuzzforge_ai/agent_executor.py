@@ -1,3 +1,4 @@
+# ruff: noqa: E402  # Imports delayed for environment/logging setup
 """FuzzForge Agent Executor - orchestrates workflows and delegation."""
 # Copyright (c) 2025 FuzzingLabs
 #
@@ -12,7 +13,6 @@
 
 
 import asyncio
-import base64
 import time
 import uuid
 import json
@@ -174,7 +174,7 @@ class FuzzForgeExecutor:
                         else:
                             # Run now if no loop is running
                             loop.run_until_complete(self._register_agent_async(url, name))
-                    except:
+                    except Exception:
                         # Ignore auto-registration failures
                         pass
         except Exception as e:
@@ -392,7 +392,7 @@ class FuzzForgeExecutor:
                     user_email = f"project_{config.get_project_context()['project_id']}@fuzzforge.example"
                     user = await get_user(user_email)
                     cognee.set_user(user)
-                except Exception as e:
+                except Exception:
                     pass  # User context not critical
                 
                 # Use cognee search directly for maximum flexibility
@@ -452,11 +452,11 @@ class FuzzForgeExecutor:
                         try:
                             user = await get_user(user_email)
                             logger.info(f"Using existing user: {user_email}")
-                        except:
+                        except Exception:
                             try:
                                 user = await create_user(user_email, user_tenant)
                                 logger.info(f"Created new user: {user_email}")
-                            except:
+                            except Exception:
                                 user = None
                         
                         if user:
@@ -583,7 +583,6 @@ class FuzzForgeExecutor:
                 pattern: Glob pattern (e.g. '*.py', '**/*.js', '') 
             """
             try:
-                from pathlib import Path
 
                 # Get project root from config
                 config = ProjectConfigManager()
@@ -648,7 +647,6 @@ class FuzzForgeExecutor:
                 max_lines: Maximum lines to read (0 for all, default 200 for large files)
             """
             try:
-                from pathlib import Path
 
                 # Get project root from config
                 config = ProjectConfigManager()
@@ -711,7 +709,6 @@ class FuzzForgeExecutor:
             """
             try:
                 import re
-                from pathlib import Path
 
                 # Get project root from config
                 config = ProjectConfigManager()
@@ -757,7 +754,7 @@ class FuzzForgeExecutor:
                     result = f"Found '{search_pattern}' in {len(matches)} locations (searched {files_searched} files):\n"
                     result += "\n".join(matches[:50])
                     if len(matches) >= 50:
-                        result += f"\n... (showing first 50 matches)"
+                        result += "\n... (showing first 50 matches)"
                     return result
                 else:
                     return f"No matches found for '{search_pattern}' in {files_searched} files matching '{file_pattern}'"
@@ -845,15 +842,15 @@ class FuzzForgeExecutor:
                 elif normalised_mode in {"read_write", "readwrite", "rw"}:
                     normalised_mode = "rw"
                 else:
-                    # Fall back to Prefect defaults if we can't recognise the input
+                    # Fall back to read-only if we can't recognise the input
                     normalised_mode = "ro"
 
-                # Resolve the target path to an absolute path for Prefect's validation
+                # Resolve the target path to an absolute path for validation
                 resolved_path = target_path or "."
                 try:
                     resolved_path = str(Path(resolved_path).expanduser().resolve())
                 except Exception:
-                    # If resolution fails, Prefect will surface the validation error – use the raw value
+                    # If resolution fails, use the raw value
                     resolved_path = target_path
 
                 # Ensure configuration objects default to dictionaries instead of None
@@ -1088,7 +1085,7 @@ class FuzzForgeExecutor:
         
     def _build_instruction(self) -> str:
         """Build the agent's instruction prompt"""
-        instruction = f"""You are FuzzForge, an intelligent A2A orchestrator with dual memory systems.
+        instruction = """You are FuzzForge, an intelligent A2A orchestrator with dual memory systems.
 
 ## Your Core Responsibilities:
 
@@ -1708,7 +1705,7 @@ Be concise and intelligent in your responses."""
         if self.agentops_trace:
             try:
                 agentops.end_trace()
-            except:
+            except Exception:
                 pass
 
         # Cancel background monitors

@@ -22,58 +22,62 @@ FuzzForge relies on Docker containers for several key reasons:
 
 Every workflow in FuzzForge is executed inside a Docker container. Here’s what that means in practice:
 
-- **Workflow containers** are built from language-specific base images (like Python or Node.js), with security tools and workflow code pre-installed.
-- **Infrastructure containers** (API server, Prefect, database) use official images and are configured for the platform’s needs.
+- **Vertical worker containers** are built from language-specific base images with domain-specific security toolchains pre-installed (Android, Rust, Web, etc.).
+- **Infrastructure containers** (API server, Temporal, MinIO, database) use official images and are configured for the platform's needs.
 
-### Container Lifecycle: From Build to Cleanup
+### Worker Lifecycle: From Build to Long-Running
 
-The lifecycle of a workflow container looks like this:
+The lifecycle of a vertical worker looks like this:
 
-1. **Image Build:** A Docker image is built with all required tools and code.
-2. **Image Push/Pull:** The image is pushed to (and later pulled from) a local or remote registry.
-3. **Container Creation:** The container is created with the right volumes and environment.
-4. **Execution:** The workflow runs inside the container.
-5. **Result Storage:** Results are written to mounted volumes.
-6. **Cleanup:** The container and any temporary data are removed.
+1. **Image Build:** A Docker image is built with all required toolchains for the vertical.
+2. **Worker Start:** The worker container starts as a long-lived process.
+3. **Workflow Discovery:** Worker scans mounted `/app/toolbox` for workflows matching its vertical.
+4. **Registration:** Workflows are registered with Temporal on the worker's task queue.
+5. **Execution:** When a workflow is submitted, the worker downloads the target from MinIO and executes.
+6. **Continuous Running:** Worker remains running, ready for the next workflow.
 
 ```mermaid
 graph TB
-    Build[Build Image] --> Push[Push to Registry]
-    Push --> Pull[Pull Image]
-    Pull --> Create[Create Container]
-    Create --> Mount[Mount Volumes]
-    Mount --> Start[Start Container]
-    Start --> Execute[Run Workflow]
-    Execute --> Results[Store Results]
-    Execute --> Stop[Stop Container]
-    Stop --> Cleanup[Cleanup Data]
-    Cleanup --> Remove[Remove Container]
+    Build[Build Worker Image] --> Start[Start Worker Container]
+    Start --> Mount[Mount Toolbox Volume]
+    Mount --> Discover[Discover Workflows]
+    Discover --> Register[Register with Temporal]
+    Register --> Ready[Worker Ready]
+    Ready --> Workflow[Workflow Submitted]
+    Workflow --> Download[Download Target from MinIO]
+    Download --> Execute[Execute Workflow]
+    Execute --> Upload[Upload Results to MinIO]
+    Upload --> Ready
 ```
 
 ---
 
-## What’s Inside a Workflow Container?
+## What's Inside a Vertical Worker Container?
 
-A typical workflow container is structured like this:
+A typical vertical worker container is structured like this:
 
-- **Base Image:** Usually a slim language image (e.g., `python:3.11-slim`).
+- **Base Image:** Language-specific image (e.g., `python:3.11-slim`).
 - **System Dependencies:** Installed as needed (e.g., `git`, `curl`).
-- **Security Tools:** Pre-installed (e.g., `semgrep`, `bandit`, `safety`).
-- **Workflow Code:** Copied into the container.
+- **Domain-Specific Toolchains:** Pre-installed (e.g., Rust: `AFL++`, `cargo-fuzz`; Android: `apktool`, `Frida`).
+- **Temporal Python SDK:** For workflow execution.
+- **Boto3:** For MinIO/S3 access.
+- **Worker Script:** Discovers and registers workflows.
 - **Non-root User:** Created for execution.
-- **Entrypoint:** Runs the workflow code.
+- **Entrypoint:** Runs the worker discovery and registration loop.
 
-Example Dockerfile snippet:
+Example Dockerfile snippet for Rust worker:
 
 ```dockerfile
 FROM python:3.11-slim
-RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
-RUN pip install semgrep bandit safety
-COPY ./toolbox /app/toolbox
+RUN apt-get update && apt-get install -y git curl build-essential && rm -rf /var/lib/apt/lists/*
+# Install AFL++, cargo, etc.
+RUN pip install temporalio boto3 pydantic
+COPY worker.py /app/
 WORKDIR /app
 RUN useradd -m -u 1000 fuzzforge
 USER fuzzforge
-CMD ["python", "-m", "toolbox.main"]
+# Toolbox will be mounted as volume at /app/toolbox
+CMD ["python", "worker.py"]
 ```
 
 ---
@@ -102,37 +106,42 @@ networks:
 
 ### Volume Types
 
-- **Target Code Volume:** Mounts the code to be analyzed, read-only, into the container.
-- **Result Volume:** Stores workflow results and artifacts, persists after container exit.
-- **Temporary Volumes:** Used for scratch space, destroyed with the container.
+- **Toolbox Volume:** Mounts the workflow code directory, read-only, for dynamic discovery.
+- **Worker Cache:** Local cache for downloaded MinIO targets, with LRU eviction.
+- **MinIO Data:** Persistent storage for uploaded targets and results (S3-compatible).
 
 Example volume mount:
 
 ```yaml
 volumes:
-  - "/host/path/to/code:/app/target:ro"
-  - "fuzzforge_prefect_storage:/app/prefect"
+  - "./toolbox:/app/toolbox:ro"  # Workflow code
+  - "worker_cache:/cache"         # Local cache
+  - "minio_data:/data"            # MinIO storage
 ```
 
 ### Volume Security
 
-- **Read-only Mounts:** Prevent workflows from modifying source code.
-- **Isolated Results:** Each workflow writes to its own result directory.
-- **No Arbitrary Host Access:** Only explicitly mounted paths are accessible.
+- **Read-only Toolbox:** Workflows cannot modify the mounted toolbox code.
+- **Isolated Storage:** Each workflow's target is stored with a unique `target_id` in MinIO.
+- **No Host Filesystem Access:** Workers access targets via MinIO, not host paths.
+- **Automatic Cleanup:** MinIO lifecycle policies delete old targets after 7 days.
 
 ---
 
-## How Are Images Built and Managed?
+## How Are Worker Images Built and Managed?
 
-- **Automated Builds:** Images are built and pushed to a local registry for development, or a secure registry for production.
+- **Automated Builds:** Vertical worker images are built with specialized toolchains.
 - **Build Optimization:** Use layer caching, multi-stage builds, and minimal base images.
-- **Versioning:** Use tags (`latest`, semantic versions, or SHA digests) to track images.
+- **Versioning:** Use tags (`latest`, semantic versions) to track worker images.
+- **Long-Lived:** Workers run continuously, not ephemeral per-workflow.
 
-Example build and push:
+Example build:
 
 ```bash
-docker build -t localhost:5001/fuzzforge-static-analysis:latest .
-docker push localhost:5001/fuzzforge-static-analysis:latest
+cd workers/rust
+docker build -t fuzzforge-worker-rust:latest .
+# Or via docker-compose
+docker-compose -f docker-compose.temporal.yaml build worker-rust
 ```
 
 ---
@@ -147,7 +156,7 @@ Example resource config:
 
 ```yaml
 services:
-  prefect-worker:
+  worker-rust:
     deploy:
       resources:
         limits:
@@ -156,6 +165,8 @@ services:
         reservations:
           memory: 1G
           cpus: '0.5'
+    environment:
+      MAX_CONCURRENT_ACTIVITIES: 5
 ```
 
 ---
@@ -172,7 +183,7 @@ Example security options:
 
 ```yaml
 services:
-  prefect-worker:
+  worker-rust:
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -188,8 +199,9 @@ services:
 ## How Is Performance Optimized?
 
 - **Image Layering:** Structure Dockerfiles for efficient caching.
-- **Dependency Preinstallation:** Reduce startup time by pre-installing dependencies.
-- **Warm Containers:** Optionally pre-create containers for faster workflow startup.
+- **Pre-installed Toolchains:** All tools installed in worker image, zero setup time per workflow.
+- **Long-Lived Workers:** Eliminate container startup overhead entirely.
+- **Local Caching:** MinIO targets cached locally for repeated workflows.
 - **Horizontal Scaling:** Scale worker containers to handle more workflows in parallel.
 
 ---
@@ -205,10 +217,10 @@ services:
 
 ## How Does This All Fit Into FuzzForge?
 
-- **Prefect Workers:** Manage the full lifecycle of workflow containers.
-- **API Integration:** Exposes container status, logs, and resource metrics.
-- **Volume Management:** Ensures results and artifacts are collected and persisted.
-- **Security and Resource Controls:** Enforced automatically for every workflow.
+- **Temporal Workers:** Long-lived vertical workers execute workflows with pre-installed toolchains.
+- **API Integration:** Exposes workflow status, logs, and resource metrics via Temporal.
+- **MinIO Storage:** Ensures targets and results are stored, cached, and cleaned up automatically.
+- **Security and Resource Controls:** Enforced automatically for every worker and workflow.
 
 ---
 

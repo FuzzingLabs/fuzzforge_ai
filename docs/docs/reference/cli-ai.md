@@ -136,7 +136,6 @@ FuzzForge supports the Model Context Protocol (MCP), allowing LLM clients and AI
   "parameters": {
     "workflow_name": "infrastructure_scan",
     "target_path": "/path/to/your/project",
-    "volume_mode": "ro",
     "parameters": {
       "checkov_config": {
         "severity": ["HIGH", "MEDIUM", "LOW"]
@@ -193,7 +192,7 @@ FuzzForge supports the Model Context Protocol (MCP), allowing LLM clients and AI
   `curl http://localhost:8000/workflows/`
 
 - **Scan Submission Errors:**
-  `curl -X POST http://localhost:8000/workflows/infrastructure_scan/submit -H "Content-Type: application/json" -d '{"target_path": "/your/path", "volume_mode": "ro"}'`
+  `curl -X POST http://localhost:8000/workflows/infrastructure_scan/submit -H "Content-Type: application/json" -d '{"target_path": "/your/path"}'`
 
 - **General Support:**
   - Check Docker Compose logs: `docker compose logs fuzzforge-backend`

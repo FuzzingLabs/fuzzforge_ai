@@ -10,7 +10,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%20%2B%20Apache-orange" alt="License: BSL + Apache"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+"/></a>
   <a href="https://fuzzforge.ai"><img src="https://img.shields.io/badge/Website-fuzzforge.ai-blue" alt="Website"/></a>
-  <img src="https://img.shields.io/badge/version-0.6.0-green" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.7.0-green" alt="Version">
   <a href="https://github.com/FuzzingLabs/fuzzforge_ai/stargazers"><img src="https://img.shields.io/github/stars/FuzzingLabs/fuzzforge_ai?style=social" alt="GitHub Stars"></a>
   
 </p>
@@ -41,6 +41,8 @@
 FuzzForge is **open source**, built to empower security teams, researchers, and the community.
 
 > 🚧 FuzzForge is under active development. Expect breaking changes.
+>
+> **Note:** Fuzzing workflows (`atheris_fuzzing`, `cargo_fuzzing`, `ossfuzz_campaign`) are in early development. OSS-Fuzz integration is under heavy active development. For stable workflows, use: `security_assessment`, `gitleaks_detection`, `trufflehog_detection`, or `llm_secret_detection`.
 
 ---
 
@@ -59,9 +61,26 @@ If you find FuzzForge useful, please star the repo to support development 🚀
 - 🤖 **AI Agents for Security** – Specialized agents for AppSec, reversing, and fuzzing
 - 🛠 **Workflow Automation** – Define & execute AppSec workflows as code
 - 📈 **Vulnerability Research at Scale** – Rediscover 1-days & find 0-days with automation
-- 🔗 **Fuzzer Integration** – AFL, Honggfuzz, AFLnet, StateAFL & more
+- 🔗 **Fuzzer Integration** – Atheris (Python), cargo-fuzz (Rust), OSS-Fuzz campaigns
 - 🌐 **Community Marketplace** – Share workflows, corpora, PoCs, and modules
 - 🔒 **Enterprise Ready** – Team/Corp cloud tiers for scaling offensive security
+
+---
+
+## 🔍 Secret Detection Benchmarks
+
+FuzzForge includes three secret detection workflows benchmarked on a controlled dataset of **32 documented secrets** (12 Easy, 10 Medium, 10 Hard):
+
+| Tool | Recall | Secrets Found | Speed |
+|------|--------|---------------|-------|
+| **LLM (gpt-5-mini)** | **84.4%** | 41 | 618s |
+| **LLM (gpt-4o-mini)** | 56.2% | 30 | 297s |
+| **Gitleaks** | 37.5% | 12 | 5s |
+| **TruffleHog** | 0.0% | 1 | 5s |
+
+📊 [Full benchmark results and analysis](backend/benchmarks/by_category/secret_detection/results/comparison_report.md)
+
+The LLM-based detector excels at finding obfuscated and hidden secrets through semantic analysis, while pattern-based tools (Gitleaks) offer speed for standard secret formats.
 
 ---
 
@@ -81,38 +100,20 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 **Docker**
 For containerized workflows, see the [Docker Installation Guide](https://docs.docker.com/get-docker/).
 
-#### Configure Docker Daemon
+#### Configure AI Agent API Keys (Optional)
 
-Before running `docker compose up`, configure Docker to allow insecure registries (required for the local registry).
+For AI-powered workflows, configure your LLM API keys:
 
-Add the following to your Docker daemon configuration:
-
-```json
-{
-  "insecure-registries": [
-    "localhost:5000",
-    "host.docker.internal:5001",
-    "registry:5000"
-  ]
-}
+```bash
+cp volumes/env/.env.example volumes/env/.env
+# Edit volumes/env/.env and add your API keys (OpenAI, Anthropic, Google, etc.)
 ```
 
-**macOS (Docker Desktop):**
-1. Open Docker Desktop
-2. Go to Settings → Docker Engine
-3. Add the `insecure-registries` configuration to the JSON
-4. Click "Apply & Restart"
+This is required for:
+- `llm_secret_detection` workflow
+- AI agent features (`ff ai agent`)
 
-**Linux:**
-1. Edit `/etc/docker/daemon.json` (create if it doesn't exist):
-   ```bash
-   sudo nano /etc/docker/daemon.json
-   ```
-2. Add the configuration above
-3. Restart Docker:
-   ```bash
-   sudo systemctl restart docker
-   ```
+Basic security workflows (gitleaks, trufflehog, security_assessment) work without this configuration.
 
 ### CLI Installation
 
@@ -131,30 +132,37 @@ uv tool install --python python3.12 .
 
 ## ⚡ Quickstart
 
-Run your first workflow :
+Run your first workflow with **Temporal orchestration** and **automatic file upload**:
 
 ```bash
 # 1. Clone the repo
 git clone https://github.com/fuzzinglabs/fuzzforge_ai.git
 cd fuzzforge_ai
 
-# 2. Build & run with Docker
-# Set registry host for your OS (local registry is mandatory)
-# macOS/Windows (Docker Desktop):
-export REGISTRY_HOST=host.docker.internal
-# Linux (default):
-# export REGISTRY_HOST=localhost
+# 2. Start FuzzForge with Temporal
 docker compose up -d
 ```
 
-> The first launch can take 5-10 minutes due to Docker image building - a good time for a coffee break ☕
+> The first launch can take 2-3 minutes for services to initialize ☕
 
 ```bash
-# 3. Run your first workflow
-cd test_projects/vulnerable_app/ # Go into the test directory
-fuzzforge init # Init a fuzzforge project
-ff workflow run security_assessment . # Start a workflow (you can also use ff command)
+# 3. Run your first workflow (files are automatically uploaded)
+cd test_projects/vulnerable_app/
+fuzzforge init                           # Initialize FuzzForge project
+ff workflow run security_assessment .    # Start workflow - CLI uploads files automatically!
+
+# The CLI will:
+# - Detect the local directory
+# - Create a compressed tarball
+# - Upload to backend (via MinIO)
+# - Start the workflow on vertical worker
 ```
+
+**What's running:**
+- **Temporal**: Workflow orchestration (UI at http://localhost:8233)
+- **MinIO**: File storage for targets (Console at http://localhost:9001)
+- **Vertical Workers**: Pre-built workers with security toolchains
+- **Backend API**: FuzzForge REST API (http://localhost:8000)
 
 ### Manual Workflow Setup
 

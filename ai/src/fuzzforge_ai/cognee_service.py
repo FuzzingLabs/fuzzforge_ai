@@ -15,11 +15,9 @@ Provides integrated Cognee functionality for codebase analysis and knowledge gra
 
 
 import os
-import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-from datetime import datetime
+from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +156,7 @@ class CogneeService:
                 self._user = await get_user(fallback_email)
                 logger.info(f"Using existing user: {fallback_email}")
                 return
-            except:
+            except Exception:
                 # User doesn't exist, try to create fallback
                 pass
             

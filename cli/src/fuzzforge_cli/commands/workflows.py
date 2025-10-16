@@ -18,10 +18,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Prompt
 from rich.syntax import Syntax
 from rich import box
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from ..config import get_project_config, FuzzForgeConfig
 from ..fuzzy import enhanced_workflow_not_found_handler
@@ -68,7 +68,7 @@ def list_workflows():
         console.print(f"\n🔧 [bold]Available Workflows ({len(workflows)})[/bold]\n")
         console.print(table)
 
-        console.print(f"\n💡 Use [bold cyan]fuzzforge workflows info <name>[/bold cyan] for detailed information")
+        console.print("\n💡 Use [bold cyan]fuzzforge workflows info <name>[/bold cyan] for detailed information")
 
     except Exception as e:
         console.print(f"❌ Failed to fetch workflows: {e}", style="red")
@@ -100,7 +100,6 @@ def workflow_info(
             info_table.add_row("Author", workflow.author)
         if workflow.tags:
             info_table.add_row("Tags", ", ".join(workflow.tags))
-        info_table.add_row("Volume Modes", ", ".join(workflow.supported_volume_modes))
         info_table.add_row("Custom Docker", "✅ Yes" if workflow.has_custom_docker else "❌ No")
 
         console.print(
@@ -193,7 +192,7 @@ def workflow_parameters(
         parameters = {}
         properties = workflow.parameters.get("properties", {})
         required_params = set(workflow.parameters.get("required", []))
-        defaults = param_response.defaults
+        defaults = param_response.default_parameters
 
         if interactive:
             console.print("🔧 Enter parameter values (press Enter for default):\n")

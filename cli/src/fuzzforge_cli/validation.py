@@ -15,7 +15,7 @@ Input validation utilities for FuzzForge CLI.
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from .constants import SUPPORTED_VOLUME_MODES, SUPPORTED_EXPORT_FORMATS
 from .exceptions import ValidationError

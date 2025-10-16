@@ -16,15 +16,12 @@ Separate from Cognee which will be used for RAG/codebase analysis
 
 
 import os
-import json
-from typing import Dict, List, Any, Optional
-from datetime import datetime
+from typing import Dict, Any
 import logging
 
 # ADK Memory imports
 from google.adk.memory import InMemoryMemoryService, BaseMemoryService
 from google.adk.memory.base_memory_service import SearchMemoryResponse
-from google.adk.memory.memory_entry import MemoryEntry
 
 # Optional VertexAI Memory Bank
 try:

@@ -16,7 +16,7 @@ Provides intelligent tab completion for commands, workflows, run IDs, and parame
 
 
 import typer
-from typing import List, Optional
+from typing import List
 from pathlib import Path
 
 from .config import get_project_config, FuzzForgeConfig

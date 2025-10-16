@@ -1,3 +1,4 @@
+# ruff: noqa: E402  # Imports delayed for environment/logging setup
 """
 FuzzForge A2A Server
 Run this to expose FuzzForge as an A2A-compatible agent
@@ -78,7 +79,7 @@ def create_a2a_app():
     print("\033[0m")  # Reset color
     
     # Create A2A app
-    print(f"🚀 Starting FuzzForge A2A Server")
+    print("🚀 Starting FuzzForge A2A Server")
     print(f"   Model: {fuzzforge.model}")
     if fuzzforge.cognee_url:
         print(f"   Memory: Cognee at {fuzzforge.cognee_url}")
@@ -86,7 +87,7 @@ def create_a2a_app():
     
     app = create_custom_a2a_app(fuzzforge.adk_agent, port=port, executor=fuzzforge.executor)
     
-    print(f"\n✅ FuzzForge A2A Server ready!")
+    print("\n✅ FuzzForge A2A Server ready!")
     print(f"   Agent card: http://localhost:{port}/.well-known/agent-card.json")
     print(f"   A2A endpoint: http://localhost:{port}/")
     print(f"\n📡 Other agents can register FuzzForge at: http://localhost:{port}")
@@ -101,7 +102,7 @@ def main():
     app = create_a2a_app()
     port = int(os.getenv('FUZZFORGE_PORT', 10100))
 
-    print(f"\n🎯 Starting server with uvicorn...")
+    print("\n🎯 Starting server with uvicorn...")
     uvicorn.run(app, host="127.0.0.1", port=port)
 
 

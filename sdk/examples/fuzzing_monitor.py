@@ -23,11 +23,10 @@ This example demonstrates how to:
 import asyncio
 import signal
 import sys
-import time
 from pathlib import Path
 from datetime import datetime
 
-from fuzzforge_sdk import FuzzForgeClient, WorkflowSubmission
+from fuzzforge_sdk import FuzzForgeClient
 from fuzzforge_sdk.utils import (
     create_workflow_submission,
     create_resource_limits,
@@ -113,7 +112,7 @@ class FuzzingMonitor:
         corpus_size = stats_data.get('corpus_size', 0)
         elapsed_time = stats_data.get('elapsed_time', 0)
 
-        print(f"📊 Statistics:")
+        print("📊 Statistics:")
         print(f"   Executions: {executions:,}")
         print(f"   Rate: {format_execution_rate(exec_per_sec)}")
         print(f"   Runtime: {format_duration(elapsed_time)}")
@@ -123,7 +122,7 @@ class FuzzingMonitor:
             print(f"   Coverage: {coverage:.1f}%")
 
         print()
-        print(f"💥 Crashes:")
+        print("💥 Crashes:")
         print(f"   Total crashes: {crashes}")
         print(f"   Unique crashes: {unique_crashes}")
 
@@ -204,11 +203,11 @@ async def main():
             }
         )
 
-        print(f"🚀 Submitting fuzzing workflow...")
+        print("🚀 Submitting fuzzing workflow...")
         response = await client.asubmit_workflow(selected_workflow.name, submission)
         monitor.run_id = response.run_id
 
-        print(f"✅ Fuzzing started!")
+        print("✅ Fuzzing started!")
         print(f"   Run ID: {response.run_id}")
         print(f"   Initial status: {response.status}")
         print()

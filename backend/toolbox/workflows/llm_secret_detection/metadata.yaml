@@ -1,0 +1,43 @@
+name: llm_secret_detection
+version: "1.0.0"
+vertical: secrets
+description: "AI-powered secret detection using LLM semantic analysis"
+author: "FuzzForge Team"
+tags:
+  - "secrets"
+  - "llm"
+  - "ai"
+  - "semantic"
+
+workspace_isolation: "shared"
+
+parameters:
+  type: object
+  properties:
+    agent_url:
+      type: string
+      default: "http://fuzzforge-task-agent:8000/a2a/litellm_agent"
+    
+    llm_model:
+      type: string
+      default: "gpt-4o-mini"
+    
+    llm_provider:
+      type: string
+      default: "openai"
+    
+    max_files:
+      type: integer
+      default: 20
+
+default_parameters:
+  agent_url: "http://fuzzforge-task-agent:8000/a2a/litellm_agent"
+  llm_model: "gpt-4o-mini"
+  llm_provider: "openai"
+  max_files: 20
+
+required_modules:
+  - "llm_secret_detector"
+
+supported_volume_modes:
+  - "ro"

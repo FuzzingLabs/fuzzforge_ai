@@ -15,7 +15,6 @@ This module provides the main entry point for the FuzzForge CLI application.
 # Additional attribution and requirements are provided in the NOTICE file.
 
 
-import typer
 from src.fuzzforge_cli.main import app
 
 if __name__ == "__main__":

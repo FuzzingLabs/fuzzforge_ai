@@ -82,7 +82,6 @@ curl -X POST "http://localhost:8000/workflows/security_assessment/submit" \
   -H "Content-Type: application/json" \
   -d '{
     "target_path": "/path/to/test_projects/vulnerable_app",
-    "volume_mode": "ro",
     "parameters": {
       "scanner_config": {"check_sensitive": true},
       "analyzer_config": {"check_secrets": true, "check_sql": true}

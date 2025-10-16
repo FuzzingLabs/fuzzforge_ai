@@ -7,6 +7,8 @@ in codebases and repositories.
 Available modules:
 - TruffleHog: Comprehensive secret detection with verification
 - Gitleaks: Git-specific secret scanning and leak detection
+- GitGuardian: Enterprise secret detection using GitGuardian API
+- LLM Secret Detector: AI-powered semantic secret detection
 """
 # Copyright (c) 2025 FuzzingLabs
 #

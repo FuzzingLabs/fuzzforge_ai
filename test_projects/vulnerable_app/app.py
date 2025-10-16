@@ -15,7 +15,6 @@ Test vulnerable application for FuzzForge security scanning.
 Contains intentional security vulnerabilities for testing purposes.
 """
 
-import os
 import subprocess
 import sqlite3
 

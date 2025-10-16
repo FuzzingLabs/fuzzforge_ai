@@ -151,10 +151,10 @@ fuzzforge workflows parameters security_assessment --no-interactive
 ### Workflow Execution
 
 #### `fuzzforge workflow <workflow> <target-path>`
-Execute a security testing workflow.
+Execute a security testing workflow with **automatic file upload**.
 
 ```bash
-# Basic execution
+# Basic execution - CLI automatically detects local files and uploads them
 fuzzforge workflow security_assessment /path/to/code
 
 # With parameters
@@ -170,6 +170,49 @@ fuzzforge workflow security_assessment /path/to/code \
 fuzzforge workflow security_assessment /path/to/code --wait
 ```
 
+**Automatic File Upload Behavior:**
+
+The CLI intelligently handles target files based on whether they exist locally:
+
+1. **Local file/directory exists** → **Automatic upload to MinIO**:
+   - CLI creates a compressed tarball (`.tar.gz`) for directories
+   - Uploads via HTTP to backend API
+   - Backend stores in MinIO with unique `target_id`
+   - Worker downloads from MinIO when ready to analyze
+   - ✅ **Works from any machine** (no shared filesystem needed)
+
+2. **Path doesn't exist locally** → **Path-based submission** (legacy):
+   - Path is sent to backend as-is
+   - Backend expects target to be accessible on its filesystem
+   - ⚠️ Only works when CLI and backend share filesystem
+
+**Example workflow:**
+```bash
+$ ff workflow security_assessment ./my-project
+
+🔧 Getting workflow information for: security_assessment
+📦 Detected local directory: ./my-project (21 files)
+🗜️  Creating compressed tarball...
+📤 Uploading to backend (0.01 MB)...
+✅ Upload complete! Target ID: 548193a1-f73f-4ec1-8068-19ec2660b8e4
+
+🎯 Executing workflow:
+   Workflow: security_assessment
+   Target: my-project.tar.gz (uploaded)
+   Volume Mode: ro
+   Status: 🔄 RUNNING
+
+✅ Workflow started successfully!
+   Execution ID: security_assessment-52781925
+```
+
+**Upload Details:**
+- **Max file size**: 10 GB (configurable on backend)
+- **Compression**: Automatic for directories (reduces upload time)
+- **Storage**: Files stored in MinIO (S3-compatible)
+- **Lifecycle**: Automatic cleanup after 7 days
+- **Caching**: Workers cache downloaded targets for faster repeated workflows
+
 **Options:**
 - `--param, -p` - Parameter in key=value format (can be used multiple times)
 - `--param-file, -f` - JSON file containing parameters
@@ -177,6 +220,22 @@ fuzzforge workflow security_assessment /path/to/code --wait
 - `--timeout, -t` - Execution timeout in seconds
 - `--interactive/--no-interactive, -i/-n` - Interactive parameter input
 - `--wait, -w` - Wait for execution to complete
+
+**Worker Lifecycle Options (v0.7.0):**
+- `--auto-start/--no-auto-start` - Auto-start required worker (default: from config)
+- `--auto-stop/--no-auto-stop` - Auto-stop worker after completion (default: from config)
+
+**Examples:**
+```bash
+# Worker starts automatically (default behavior)
+fuzzforge workflow ossfuzz_campaign . project_name=zlib
+
+# Disable auto-start (worker must be running already)
+fuzzforge workflow ossfuzz_campaign . --no-auto-start
+
+# Auto-stop worker after completion
+fuzzforge workflow ossfuzz_campaign . --wait --auto-stop
+```
 
 #### `fuzzforge workflow status [execution-id]`
 Check the status of a workflow execution.
@@ -366,6 +425,12 @@ preferences:
   show_progress_bars: true
   table_style: "rich"
   color_output: true
+
+workers:
+  auto_start_workers: true    # Auto-start workers when needed
+  auto_stop_workers: false    # Auto-stop workers after completion
+  worker_startup_timeout: 60  # Worker startup timeout (seconds)
+  docker_compose_file: null   # Custom docker-compose.yml path
 ```
 
 ## 🔧 Advanced Usage

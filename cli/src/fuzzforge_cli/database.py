@@ -152,7 +152,7 @@ class FuzzForgeDatabase:
             if conn:
                 try:
                     conn.rollback()
-                except:
+                except Exception:
                     pass  # Connection might be broken
             if "database is locked" in str(e).lower():
                 raise sqlite3.OperationalError(
@@ -163,18 +163,18 @@ class FuzzForgeDatabase:
                     "Database is corrupted. Use 'ff init --force' to reset."
                 ) from e
             raise
-        except Exception as e:
+        except Exception:
             if conn:
                 try:
                     conn.rollback()
-                except:
+                except Exception:
                     pass  # Connection might be broken
             raise
         finally:
             if conn:
                 try:
                     conn.close()
-                except:
+                except Exception:
                     pass  # Ensure cleanup even if close fails
 
     # Run management methods

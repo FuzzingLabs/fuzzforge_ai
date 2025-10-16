@@ -1,3 +1,4 @@
+# ruff: noqa: E402  # Imports delayed for environment/logging setup
 #!/usr/bin/env python3
 # Copyright (c) 2025 FuzzingLabs
 #
@@ -26,7 +27,6 @@ import random
 from datetime import datetime
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
 
@@ -90,18 +90,12 @@ except ImportError:
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.prompt import Prompt
 from rich import box
 
-from google.adk.events.event import Event
-from google.adk.events.event_actions import EventActions
-from google.genai import types as gen_types
 
 from .agent import FuzzForgeAgent
-from .agent_card import get_fuzzforge_agent_card
 from .config_manager import ConfigManager
 from .config_bridge import ProjectConfigManager
-from .remote_agent import RemoteAgentConnection
 
 console = Console()
 
@@ -243,7 +237,7 @@ class FuzzForgeCLI:
             )
         )
         if self.agent.executor.agentops_trace:
-            console.print(f"Tracking: [medium_purple1]AgentOps active[/medium_purple1]")
+            console.print("Tracking: [medium_purple1]AgentOps active[/medium_purple1]")
 
         # Show skills
         console.print("\nSkills:")
@@ -320,7 +314,7 @@ class FuzzForgeCLI:
                 url=args.strip(),
                 description=description
             )
-            console.print(f"   [dim]Saved to config for auto-registration[/dim]")
+            console.print("   [dim]Saved to config for auto-registration[/dim]")
         else:
             console.print(f"[red]Failed: {result['error']}[/red]")
             
@@ -346,9 +340,9 @@ class FuzzForgeCLI:
         # Remove from config
         if self.config_manager.remove_registered_agent(name=agent_to_remove['name'], url=agent_to_remove['url']):
             console.print(f"✅ Unregistered: [bold]{agent_to_remove['name']}[/bold]")
-            console.print(f"   [dim]Removed from config (won't auto-register next time)[/dim]")
+            console.print("   [dim]Removed from config (won't auto-register next time)[/dim]")
         else:
-            console.print(f"[yellow]Agent unregistered from session but not found in config[/yellow]")
+            console.print("[yellow]Agent unregistered from session but not found in config[/yellow]")
     
     async def cmd_list(self, args: str = "") -> None:
         """List registered agents"""
@@ -435,7 +429,7 @@ class FuzzForgeCLI:
                                         text = data['parts'][0].get('text', '')[:150]
                                         role = data.get('role', 'unknown')
                                         console.print(f"{i}. [{role}]: {text}...")
-                                except:
+                                except Exception:
                                     console.print(f"{i}. {content[:150]}...")
                         else:
                             console.print("[yellow]No matches found in SQLite either[/yellow]")
@@ -699,7 +693,7 @@ class FuzzForgeCLI:
         )
         
         console.print(table)
-        console.print(f"\n[dim]Use /artifacts <id> to view artifact content[/dim]")
+        console.print("\n[dim]Use /artifacts <id> to view artifact content[/dim]")
 
     async def cmd_tasks(self, args: str = "") -> None:
         """List tasks or show details for a specific task."""

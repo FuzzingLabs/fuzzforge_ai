@@ -185,6 +185,9 @@ logs/
 # FuzzForge project directories (user projects should manage their own .gitignore)
 .fuzzforge/
 
+# Docker volume configs (keep .env.example but ignore actual .env)
+volumes/env/.env
+
 # Test project databases and configurations
 test_projects/*/.fuzzforge/
 test_projects/*/findings.db*
@@ -201,6 +204,7 @@ dev_config.yaml
 reports/
 output/
 findings/
+*.sarif
 *.sarif.json
 *.html.report
 security_report.*
@@ -229,6 +233,12 @@ yarn-error.log*
 *.key
 *.p12
 *.pfx
+
+# Exception: Secret detection benchmark test files (not real secrets)
+!test_projects/secret_detection_benchmark/
+!test_projects/secret_detection_benchmark/**
+!**/secret_detection_benchmark_GROUND_TRUTH.json
+
 secret*
 secrets/
 credentials*
@@ -289,3 +299,4 @@ test_projects/*/.npmrc
 test_projects/*/.git-credentials
 test_projects/*/credentials.*
 test_projects/*/api_keys.*
+test_projects/*/ci-*.sh

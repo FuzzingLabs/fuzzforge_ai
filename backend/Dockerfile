@@ -17,25 +17,21 @@ RUN apt-get update && apt-get install -y \
 
 # Docker client configuration removed - localhost:5001 doesn't require insecure registry config
 
-# Install uv for faster package management
-RUN pip install uv
-
 # Copy project files
 COPY pyproject.toml ./
-COPY uv.lock ./
 
-# Install dependencies
-RUN uv sync --no-dev
+# Install dependencies with pip
+RUN pip install --no-cache-dir -e .
 
 # Copy source code
 COPY . .
 
-# Expose port
-EXPOSE 8000
+# Expose ports (API on 8000, MCP on 8010)
+EXPOSE 8000 8010
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Start the application
-CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
