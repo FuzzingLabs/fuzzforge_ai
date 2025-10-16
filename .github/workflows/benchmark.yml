@@ -1,11 +1,11 @@
 name: Benchmarks
 
 on:
-  # Run on schedule (nightly)
-  schedule:
-    - cron: '0 2 * * *'  # 2 AM UTC every day
+  # Disabled automatic runs - benchmarks not ready for CI/CD yet
+  # schedule:
+  #   - cron: '0 2 * * *'  # 2 AM UTC every day
 
-  # Allow manual trigger
+  # Allow manual trigger for testing
   workflow_dispatch:
     inputs:
       compare_with:
@@ -13,12 +13,11 @@ on:
         required: false
         default: ''
 
-  # Run on PR when benchmarks are modified
-  pull_request:
-    paths:
-      - 'backend/benchmarks/**'
-      - 'backend/toolbox/modules/**'
-      - '.github/workflows/benchmark.yml'
+  # pull_request:
+  #   paths:
+  #     - 'backend/benchmarks/**'
+  #     - 'backend/toolbox/modules/**'
+  #     - '.github/workflows/benchmark.yml'
 
 jobs:
   benchmark:
