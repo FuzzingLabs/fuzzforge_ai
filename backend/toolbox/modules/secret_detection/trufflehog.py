@@ -61,11 +61,6 @@ class TruffleHogModule(BaseModule):
                         "items": {"type": "string"},
                         "description": "Specific detectors to exclude"
                     },
-                    "max_depth": {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "Maximum directory depth to scan"
-                    },
                     "concurrency": {
                         "type": "integer",
                         "default": 10,
@@ -100,11 +95,6 @@ class TruffleHogModule(BaseModule):
         if not isinstance(concurrency, int) or concurrency < 1 or concurrency > 50:
             raise ValueError("Concurrency must be between 1 and 50")
 
-        # Check max_depth bounds
-        max_depth = config.get("max_depth", 10)
-        if not isinstance(max_depth, int) or max_depth < 1 or max_depth > 20:
-            raise ValueError("Max depth must be between 1 and 20")
-
         return True
 
     async def execute(self, config: Dict[str, Any], workspace: Path) -> ModuleResult:
@@ -124,15 +114,15 @@ class TruffleHogModule(BaseModule):
             # Add verification flag
             if config.get("verify", False):
                 cmd.append("--verify")
+            else:
+                # Explicitly disable verification to get all unverified secrets
+                cmd.append("--no-verification")
 
             # Add JSON output
             cmd.extend(["--json", "--no-update"])
 
             # Add concurrency
             cmd.extend(["--concurrency", str(config.get("concurrency", 10))])
-
-            # Add max depth
-            cmd.extend(["--max-depth", str(config.get("max_depth", 10))])
 
             # Add include/exclude detectors
             if config.get("include_detectors"):

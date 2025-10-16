@@ -1,0 +1,34 @@
+name: trufflehog_detection
+version: "1.0.0"
+vertical: secrets
+description: "Detect secrets with verification using TruffleHog"
+author: "FuzzForge Team"
+tags:
+  - "secrets"
+  - "trufflehog"
+  - "verification"
+
+workspace_isolation: "shared"
+
+parameters:
+  type: object
+  properties:
+    verify:
+      type: boolean
+      default: true
+      description: "Verify discovered secrets"
+
+    max_depth:
+      type: integer
+      default: 10
+      description: "Maximum directory depth to scan"
+
+default_parameters:
+  verify: true
+  max_depth: 10
+
+required_modules:
+  - "trufflehog"
+
+supported_volume_modes:
+  - "ro"
