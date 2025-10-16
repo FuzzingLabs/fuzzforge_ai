@@ -385,13 +385,14 @@ def execute_workflow(
 
                 # Ensure worker is running
                 worker_container = worker_info["worker_container"]
+                worker_service = worker_info.get("worker_service", f"worker-{worker_info['vertical']}")
                 if not worker_mgr.ensure_worker_running(worker_info, auto_start=should_auto_start):
                     console.print(
                         f"❌ Worker not available: {worker_info['vertical']}",
                         style="red"
                     )
                     console.print(
-                        f"💡 Start the worker manually: docker-compose start {worker_container}"
+                        f"💡 Start the worker manually: docker compose up -d {worker_service}"
                     )
                     raise typer.Exit(1)
 

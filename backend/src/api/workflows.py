@@ -567,6 +567,7 @@ async def get_workflow_worker_info(
         "workflow": workflow_name,
         "vertical": vertical,
         "worker_container": f"fuzzforge-worker-{vertical}",
+        "worker_service": f"worker-{vertical}",
         "task_queue": f"{vertical}-queue",
         "required": True
     }

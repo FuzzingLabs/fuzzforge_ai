@@ -81,38 +81,20 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 **Docker**
 For containerized workflows, see the [Docker Installation Guide](https://docs.docker.com/get-docker/).
 
-#### Configure Docker Daemon
+#### Configure AI Agent API Keys (Optional)
 
-Before running `docker compose up`, configure Docker to allow insecure registries (required for the local registry).
+For AI-powered workflows, configure your LLM API keys:
 
-Add the following to your Docker daemon configuration:
-
-```json
-{
-  "insecure-registries": [
-    "localhost:5000",
-    "host.docker.internal:5001",
-    "registry:5000"
-  ]
-}
+```bash
+cp volumes/env/.env.example volumes/env/.env
+# Edit volumes/env/.env and add your API keys (OpenAI, Anthropic, Google, etc.)
 ```
 
-**macOS (Docker Desktop):**
-1. Open Docker Desktop
-2. Go to Settings → Docker Engine
-3. Add the `insecure-registries` configuration to the JSON
-4. Click "Apply & Restart"
+This is required for:
+- `llm_secret_detection` workflow
+- AI agent features (`ff ai agent`)
 
-**Linux:**
-1. Edit `/etc/docker/daemon.json` (create if it doesn't exist):
-   ```bash
-   sudo nano /etc/docker/daemon.json
-   ```
-2. Add the configuration above
-3. Restart Docker:
-   ```bash
-   sudo systemctl restart docker
-   ```
+Basic security workflows (gitleaks, trufflehog, security_assessment) work without this configuration.
 
 ### CLI Installation
 
@@ -139,7 +121,7 @@ git clone https://github.com/fuzzinglabs/fuzzforge_ai.git
 cd fuzzforge_ai
 
 # 2. Start FuzzForge with Temporal
-docker-compose -f docker-compose.temporal.yaml up -d
+docker compose up -d
 ```
 
 > The first launch can take 2-3 minutes for services to initialize ☕
