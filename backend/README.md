@@ -88,10 +88,6 @@ tags:
   - "analysis"
   - "comprehensive"
 
-supported_volume_modes:
-  - "ro"
-  - "rw"
-
 requirements:
   tools:
     - "file_scanner"
@@ -111,11 +107,6 @@ parameters:
       type: string
       default: "/workspace"
       description: "Path to analyze"
-    volume_mode:
-      type: string
-      enum: ["ro", "rw"]
-      default: "ro"
-      description: "Volume mount mode"
     scanner_config:
       type: object
       description: "Scanner configuration"
@@ -160,7 +151,6 @@ curl -X POST "http://localhost:8000/workflows/security_assessment/submit" \
   -H "Content-Type: application/json" \
   -d '{
     "target_path": "/tmp/project",
-    "volume_mode": "ro",
     "resource_limits": {
       "memory_limit": "1Gi",
       "cpu_limit": "1"
@@ -183,7 +173,6 @@ Content-Type: multipart/form-data
 Parameters:
   file: File upload (supports .tar.gz for directories)
   parameters: JSON string of workflow parameters (optional)
-  volume_mode: "ro" or "rw" (default: "ro")
   timeout: Execution timeout in seconds (optional)
 ```
 
@@ -194,13 +183,11 @@ Example using curl:
 tar -czf project.tar.gz /path/to/project
 curl -X POST "http://localhost:8000/workflows/security_assessment/upload-and-submit" \
   -F "file=@project.tar.gz" \
-  -F "parameters={\"check_secrets\":true}" \
-  -F "volume_mode=ro"
+  -F "parameters={\"check_secrets\":true}"
 
 # Upload a single file
 curl -X POST "http://localhost:8000/workflows/security_assessment/upload-and-submit" \
-  -F "file=@binary.elf" \
-  -F "volume_mode=ro"
+  -F "file=@binary.elf"
 ```
 
 ### Storage Flow
@@ -257,8 +244,7 @@ class MyModule(BaseModule):
 tar -czf project.tar.gz /home/user/project
 curl -X POST "http://localhost:8000/workflows/security_assessment/upload-and-submit" \
   -F "file=@project.tar.gz" \
-  -F "parameters={\"scanner_config\":{\"patterns\":[\"*.py\"]},\"analyzer_config\":{\"check_secrets\":true}}" \
-  -F "volume_mode=ro"
+  -F "parameters={\"scanner_config\":{\"patterns\":[\"*.py\"]},\"analyzer_config\":{\"check_secrets\":true}}"
 ```
 
 ### Legacy Path-Based Submission
@@ -269,7 +255,6 @@ curl -X POST "http://localhost:8000/workflows/security_assessment/submit" \
   -H "Content-Type: application/json" \
   -d '{
     "target_path": "/home/user/project",
-    "volume_mode": "ro",
     "parameters": {
       "scanner_config": {"patterns": ["*.py"]},
       "analyzer_config": {"check_secrets": true}

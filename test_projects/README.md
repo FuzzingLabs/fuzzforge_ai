@@ -47,24 +47,21 @@ The vulnerable application can be tested with multiple security workflows:
 curl -X POST http://localhost:8000/workflows/security_assessment/submit \
   -H "Content-Type: application/json" \
   -d '{
-    "target_path": "/path/to/test_projects/vulnerable_app",
-    "volume_mode": "ro"
+    "target_path": "/path/to/test_projects/vulnerable_app"
   }'
 
 # Test Gitleaks secret detection workflow
 curl -X POST http://localhost:8000/workflows/gitleaks_detection/submit \
   -H "Content-Type: application/json" \
   -d '{
-    "target_path": "/path/to/test_projects/vulnerable_app",
-    "volume_mode": "ro"
+    "target_path": "/path/to/test_projects/vulnerable_app"
   }'
 
 # Test TruffleHog secret detection workflow
 curl -X POST http://localhost:8000/workflows/trufflehog_detection/submit \
   -H "Content-Type: application/json" \
   -d '{
-    "target_path": "/path/to/test_projects/vulnerable_app",
-    "volume_mode": "ro"
+    "target_path": "/path/to/test_projects/vulnerable_app"
   }'
 ```
 

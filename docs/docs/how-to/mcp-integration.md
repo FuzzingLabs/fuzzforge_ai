@@ -83,7 +83,6 @@ You should see status responses and endpoint listings.
   "parameters": {
     "workflow_name": "infrastructure_scan",
     "target_path": "/path/to/your/project",
-    "volume_mode": "ro",
     "parameters": {
       "checkov_config": {
         "severity": ["HIGH", "MEDIUM", "LOW"]
@@ -183,7 +182,7 @@ curl http://localhost:8000/workflows/
 ```bash
 curl -X POST http://localhost:8000/workflows/infrastructure_scan/submit \
   -H "Content-Type: application/json" \
-  -d '{"target_path": "/your/path", "volume_mode": "ro"}'
+  -d '{"target_path": "/your/path"}'
 ```
 
 ### General Support

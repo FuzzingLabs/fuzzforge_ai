@@ -186,8 +186,7 @@ For local files, you can use the upload endpoint:
 # Create tarball and upload
 tar -czf project.tar.gz /path/to/your/project
 curl -X POST "http://localhost:8000/workflows/security_assessment/upload-and-submit" \
-     -F "file=@project.tar.gz" \
-     -F "volume_mode=ro"
+     -F "file=@project.tar.gz"
 
 # Check status
 curl "http://localhost:8000/runs/{run-id}/status"

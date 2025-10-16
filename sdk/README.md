@@ -45,7 +45,6 @@ target_path = Path("/path/to/your/project")
 response = client.submit_workflow_with_upload(
     workflow_name="security_assessment",
     target_path=target_path,
-    volume_mode="ro",
     timeout=300
 )
 
@@ -74,7 +73,6 @@ client = FuzzForgeClient(base_url="http://localhost:8000")
 # Submit a workflow with path (only works if backend can access the path)
 submission = create_workflow_submission(
     target_path="/path/on/backend/filesystem",
-    volume_mode="ro",
     timeout=300
 )
 
@@ -103,7 +101,6 @@ def submit_workflow_with_upload(
     workflow_name: str,
     target_path: Union[str, Path],
     parameters: Optional[Dict[str, Any]] = None,
-    volume_mode: str = "ro",
     timeout: Optional[int] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> RunSubmissionResponse:
@@ -114,7 +111,6 @@ def submit_workflow_with_upload(
         workflow_name: Name of the workflow to execute
         target_path: Path to file or directory to upload
         parameters: Optional workflow parameters
-        volume_mode: Volume mount mode ('ro' or 'rw')
         timeout: Optional execution timeout in seconds
         progress_callback: Optional callback(bytes_sent, total_bytes)
 
@@ -144,7 +140,6 @@ response = client.submit_workflow_with_upload(
     workflow_name="security_assessment",
     target_path=Path("./my-project"),
     parameters={"check_secrets": True},
-    volume_mode="ro",
     progress_callback=upload_progress
 )
 
