@@ -154,12 +154,17 @@ cp volumes/env/.env.example volumes/env/.env
 
 # 3. Start FuzzForge with Temporal
 docker compose up -d
+
+# 4. Start the Python worker (needed for security_assessment workflow)
+docker compose up -d worker-python
 ```
 
 > The first launch can take 2-3 minutes for services to initialize ☕
+>
+> Workers don't auto-start by default (saves RAM). Start the worker you need before running workflows.
 
 ```bash
-# 3. Run your first workflow (files are automatically uploaded)
+# 5. Run your first workflow (files are automatically uploaded)
 cd test_projects/vulnerable_app/
 fuzzforge init                           # Initialize FuzzForge project
 ff workflow run security_assessment .    # Start workflow - CLI uploads files automatically!
@@ -172,7 +177,7 @@ ff workflow run security_assessment .    # Start workflow - CLI uploads files au
 ```
 
 **What's running:**
-- **Temporal**: Workflow orchestration (UI at http://localhost:8233)
+- **Temporal**: Workflow orchestration (UI at http://localhost:8080)
 - **MinIO**: File storage for targets (Console at http://localhost:9001)
 - **Vertical Workers**: Pre-built workers with security toolchains
 - **Backend API**: FuzzForge REST API (http://localhost:8000)

@@ -89,6 +89,21 @@ curl http://localhost:8000/health
 # Should return: {"status":"healthy"}
 ```
 
+### Start the Python Worker
+
+Workers don't auto-start by default (saves RAM). Start the Python worker for your first workflow:
+
+```bash
+# Start the Python worker
+docker compose up -d worker-python
+
+# Verify it's running
+docker compose ps worker-python
+# Should show: Up (healthy)
+```
+
+**Note:** Workers use Docker Compose profiles and only start when needed. For your first workflow run, it's safer to start the worker manually. Later, the CLI can auto-start workers on demand.
+
 ## Step 4: Install the CLI (Optional but Recommended)
 
 Install the FuzzForge CLI for easier workflow management:
