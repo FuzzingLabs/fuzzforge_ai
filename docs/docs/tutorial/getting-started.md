@@ -124,13 +124,16 @@ fuzzforge workflows list
 curl http://localhost:8000/workflows | jq .
 ```
 
-You should see 6 production workflows:
-- `static_analysis_scan`
-- `secret_detection_scan`
-- `infrastructure_scan`
-- `penetration_testing_scan`
-- `language_fuzzing`
-- `security_assessment`
+You should see production-ready workflows:
+- `security_assessment` - Comprehensive security analysis (secrets, SQL, dangerous functions)
+- `gitleaks_detection` - Pattern-based secret detection
+- `trufflehog_detection` - Pattern-based secret detection
+- `llm_secret_detection` - AI-powered secret detection (requires API key)
+
+And development workflows:
+- `atheris_fuzzing` - Python fuzzing (early development)
+- `cargo_fuzzing` - Rust fuzzing (early development)
+- `ossfuzz_campaign` - OSS-Fuzz integration (heavy development)
 
 ## Step 6: Run Your First Workflow
 
@@ -183,19 +186,19 @@ curl "http://localhost:8000/runs/{run-id}/findings"
 The workflow will complete in 30-60 seconds and return results in SARIF format. For the test project, you should see:
 
 - **Total findings**: 15-20 security issues
-- **Tools used**: OpenGrep (Semgrep) and Bandit
+- **Analysis modules**: FileScanner and SecurityAnalyzer (regex-based detection)
 - **Severity levels**: High, Medium, and Low vulnerabilities
 - **Categories**: SQL injection, command injection, hardcoded secrets, etc.
 
 Example output:
 ```json
 {
-  "workflow": "static_analysis_scan",
+  "workflow": "security_assessment",
   "status": "completed",
   "total_findings": 18,
   "scan_status": {
-    "opengrep": "success",
-    "bandit": "success"
+    "file_scanner": "success",
+    "security_analyzer": "success"
   },
   "severity_counts": {
     "high": 6,
